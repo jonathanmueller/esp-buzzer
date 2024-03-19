@@ -3,11 +3,12 @@
 
 #include "button.h"
 #include "esp_now.h"
+#include "led.h"
 
 #define SECONDS_TO_REMEMBER_PEERS 30
 #define ACCOUNCEMENT_INTERVAL_SECONDS 10
-#define SHUTDOWN_TIME_NO_BUZZING (20000)
-#define SHUTDOWN_TIME_NO_COMMS (15000)
+#define SHUTDOWN_TIME_NO_BUZZING    (1000 * 60 * 20)    // 20 minutes without buzzing, even when others are around -> shut down
+#define SHUTDOWN_TIME_NO_COMMS      (1000 * 60 * 5)     // 5 minutes without another nearby buzzer -> shutdown
 
 #undef CONFIG_ESPNOW_ENCRYPT
 
@@ -86,15 +87,6 @@ enum espnow_data_type_t : uint8_t {
     ESP_DATA_TYPE_STATE_UPDATE,
     ESP_DATA_TYPE_MY_BUZZER_WAS_PRESSED,
     ESP_DATA_TYPE_MAX
-};
-
-enum color_t : uint8_t {
-    COLOR_RED,
-    COLOR_YELLOW,
-    COLOR_GREEN,
-    COLOR_BLUE,
-    COLOR_WHITE,
-    COLOR_MAX
 };
 
 typedef struct {

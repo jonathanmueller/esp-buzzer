@@ -1,10 +1,10 @@
-
 #include <Arduino.h>
 #include "battery.h"
 #include "button.h"
 #include "led.h"
 #include "comm.h"
-#include "usb.h"
+#include "custom_usb.h"
+#include "nvm.h"
 
 void check_safe_mode() {
     esp_reset_reason_t reason = esp_reset_reason();
@@ -19,10 +19,12 @@ void setup(void)
 {
     Serial.begin(9600);
     check_safe_mode();
-
+    
     log_i("Starting application...");
     
     usb_setup();
+
+    nvm_setup();
     battery_setup();
     comm_setup();
     button_setup();
@@ -30,7 +32,6 @@ void setup(void)
 }
 
 void loop() {
-    usb_loop();
     battery_loop();
     button_loop();
 }

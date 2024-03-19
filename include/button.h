@@ -12,7 +12,8 @@ enum node_state_t : uint8_t {
     STATE_IDLE,
     STATE_DISABLED,
     STATE_BUZZER_ACTIVE,
-    STATE_SHUTDOWN
+    STATE_SHUTDOWN,
+    STATE_CONFIG
 };
 
 extern node_state_t current_state;

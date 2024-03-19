@@ -324,14 +324,16 @@ static void comm_task(void *pvParameter)
 
             EVERY_N_SECONDS(ACCOUNCEMENT_INTERVAL_SECONDS) { send_state_update(); }
 
-            if (time - time_of_last_keep_alive_communication > SHUTDOWN_TIME_NO_BUZZING) {
-                log_i("Nobody pushing any buttons. Shutting down...");
-                FastLED.setBrightness(10);
-                shutdown(false, true);
-            } else if (time - time_of_last_seen_peer > SHUTDOWN_TIME_NO_COMMS) {
-                log_i("No other buzzer near me. Shutting down...");
-                FastLED.setBrightness(10);
-                shutdown(false, true);
+            if (!has_external_power) {
+                if (time - time_of_last_keep_alive_communication > SHUTDOWN_TIME_NO_BUZZING) {
+                    log_i("Nobody pushing any buttons. Shutting down...");
+                    FastLED.setBrightness(10);
+                    shutdown(false, true);
+                } else if (time - time_of_last_seen_peer > SHUTDOWN_TIME_NO_COMMS) {
+                    log_i("No other buzzer near me. Shutting down...");
+                    FastLED.setBrightness(10);
+                    shutdown(false, true);
+                }
             }
         }
     }

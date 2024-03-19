@@ -22,9 +22,45 @@
  * THE SOFTWARE.
  *
  */
+#include "Arduino.h"
+#include "sdkconfig.h"
 #ifdef CONFIG_TINYUSB_ENABLED
 #include "tusb.h"
-#include "usb_descriptors.h"
+
+static bool WEBUSB_ENABLED                = true;
+typedef char tusb_str_t[127];
+static tusb_str_t WEBUSB_URL              = "https://google.com";
+
+enum
+{
+  VENDOR_REQUEST_WEBUSB = 1,
+  VENDOR_REQUEST_MICROSOFT = 2
+};
+
+//--------------------------------------------------------------------+
+// String Descriptors
+//--------------------------------------------------------------------+
+
+// String Descriptor Index
+enum {
+  STRID_LANGID = 0,
+  STRID_MANUFACTURER,
+  STRID_PRODUCT,
+  STRID_SERIAL,
+  STRID_CDC,
+  STRID_VENDOR,
+};
+
+// array of pointer to string descriptors
+char const *string_desc_arr[] =
+{
+  (const char[]) { 0x09, 0x04 }, // 0: is supported language is English (0x0409)
+  "Johnny",                      // 1: Manufacturer
+  "Buzzer Controller",           // 2: Product
+  NULL,                          // 3: Serials will use unique ID if possible
+  "BuzzerController CDC",        // 4: CDC Interface
+  "BuzzerController WebUSB"      // 5: Vendor Interface
+};
 
 /* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
  * Same VID/PID with different interface e.g MSC (first), then CDC (later) will possibly cause system error on PC.
@@ -33,7 +69,7 @@
  *   [MSB]       MIDI | HID | MSC | CDC          [LSB]
  */
 #define _PID_MAP(itf, n)  ( (CFG_TUD_##itf) << (n) )
-#define USB_PID           (0x4000 | _PID_MAP(CDC, 0) | _PID_MAP(MSC, 1) | _PID_MAP(HID, 2) | \
+#define MY_USB_PID           (0x4000 | _PID_MAP(CDC, 0) | _PID_MAP(MSC, 1) | _PID_MAP(HID, 2) | \
                            _PID_MAP(MIDI, 3) | _PID_MAP(VENDOR, 4) )
 
 //--------------------------------------------------------------------+
@@ -53,12 +89,12 @@ tusb_desc_device_t const desc_device =
     .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
 
     .idVendor           = 0xCafe,
-    .idProduct          = USB_PID,
+    .idProduct          = MY_USB_PID,
     .bcdDevice          = 0x0100,
 
-    .iManufacturer      = 0x01,
-    .iProduct           = 0x02,
-    .iSerialNumber      = 0x03,
+    .iManufacturer      = STRID_MANUFACTURER,
+    .iProduct           = STRID_PRODUCT,
+    .iSerialNumber      = STRID_SERIAL,
 
     .bNumConfigurations = 0x01
 };
@@ -117,10 +153,10 @@ uint8_t const desc_configuration[] =
   TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
 
   // Interface number, string index, EP notification address and size, EP data address (out, in) and size.
-  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 4, 0x81, 8, EPNUM_CDC_OUT, 0x80 | EPNUM_CDC_IN, TUD_OPT_HIGH_SPEED ? 512 : 64),
+  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, STRID_CDC, 0x81, 8, EPNUM_CDC_OUT, 0x80 | EPNUM_CDC_IN, TUD_OPT_HIGH_SPEED ? 512 : 64),
 
   // Interface number, string index, EP Out & IN address, EP size
-  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, 5, EPNUM_VENDOR_OUT, 0x80 | EPNUM_VENDOR_IN, TUD_OPT_HIGH_SPEED ? 512 : 64)
+  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, STRID_VENDOR, EPNUM_VENDOR_OUT, 0x80 | EPNUM_VENDOR_IN, TUD_OPT_HIGH_SPEED ? 512 : 64)
 };
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR
@@ -203,28 +239,6 @@ uint8_t const desc_ms_os_20[] =
 
 TU_VERIFY_STATIC(sizeof(desc_ms_os_20) == MS_OS_20_DESC_LEN, "Incorrect size");
 
-//--------------------------------------------------------------------+
-// String Descriptors
-//--------------------------------------------------------------------+
-
-// String Descriptor Index
-enum {
-  STRID_LANGID = 0,
-  STRID_MANUFACTURER,
-  STRID_PRODUCT,
-  STRID_SERIAL,
-};
-
-// array of pointer to string descriptors
-char const *string_desc_arr[] =
-{
-  (const char[]) { 0x09, 0x04 }, // 0: is supported language is English (0x0409)
-  "TinyUSB",                     // 1: Manufacturer
-  "TinyUSB Device",              // 2: Product
-  NULL,                          // 3: Serials will use unique ID if possible
-  "TinyUSB CDC",                 // 4: CDC Interface
-  "TinyUSB WebUSB"               // 5: Vendor Interface
-};
 
 static uint16_t _desc_str[32 + 1];
 
@@ -270,6 +284,8 @@ static inline size_t board_usb_get_serial(uint16_t desc_str1[], size_t max_chars
 }
 
 
+
+
 // Invoked when received GET STRING DESCRIPTOR request
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
@@ -311,6 +327,47 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
 
   return _desc_str;
 }
+
+typedef struct TU_ATTR_PACKED {
+  uint8_t bLength;
+  uint8_t bDescriptorType;
+  uint8_t bScheme;
+  char    url[127];
+} tinyusb_desc_webusb_url_t;
+
+static tinyusb_desc_webusb_url_t tinyusb_url_descriptor = {
+        .bLength         = 3,
+        .bDescriptorType = 3, // WEBUSB URL type
+        .bScheme         = 255, // URL Scheme Prefix: 0: "http://", 1: "https://", 255: ""
+       { .url             = ""}
+};
+
+
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request)
+{
+    log_v("rhport: %u, stage: %u, type: 0x%x, request: 0x%x", rhport, stage, request->bmRequestType_bit.type, request->bRequest);
+    if(WEBUSB_ENABLED && (request->bRequest == VENDOR_REQUEST_WEBUSB
+            || (request->bRequest == VENDOR_REQUEST_MICROSOFT && request->wIndex == 7))){
+        // we only care for SETUP stage
+        if (stage == CONTROL_STAGE_SETUP) {
+            if(request->bRequest == VENDOR_REQUEST_WEBUSB){
+                // log_d("being queried for webusb. %s", WEBUSB_URL);
+                // match vendor request in BOS descriptor
+                // Get landing page url
+                tinyusb_url_descriptor.bLength = 3 + strlen(WEBUSB_URL);
+                snprintf(tinyusb_url_descriptor.url, 127, "%s", WEBUSB_URL);
+                return tud_control_xfer(rhport, request, (void*) &tinyusb_url_descriptor, tinyusb_url_descriptor.bLength);
+            }
+            // Get Microsoft OS 2.0 compatible descriptor
+            uint16_t total_len;
+            memcpy(&total_len, desc_ms_os_20 + 8, 2);
+            return tud_control_xfer(rhport, request, (void*) desc_ms_os_20, total_len);
+        }
+        return true;
+    }
+    return false;
+}
+
 
 
 #endif
