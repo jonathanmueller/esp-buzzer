@@ -50,17 +50,55 @@ static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t eve
   }
 }
 
-static void usbCdcEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+enum { CDC_LINE_IDLE, CDC_LINE_1, CDC_LINE_2, CDC_LINE_3 };
+static void usbCdcLineStateEvent(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    arduino_usb_cdc_event_data_t * data = (arduino_usb_cdc_event_data_t*)event_data;
+
+    static uint8_t lineState = CDC_LINE_IDLE;
+
+    bool dtr = data->line_state.dtr;
+    bool rts = data->line_state.rts;
+
+    if(!dtr && rts){
+        if(lineState == CDC_LINE_IDLE){
+            lineState++;
+        } else {
+            lineState = CDC_LINE_IDLE;
+        }
+    } else if(dtr && rts){
+        if(lineState == CDC_LINE_1){
+            lineState++;
+        } else {
+            lineState = CDC_LINE_IDLE;
+        }
+    } else if(dtr && !rts){
+        if(lineState == CDC_LINE_2){
+            lineState++;
+        } else {
+            lineState = CDC_LINE_IDLE;
+        }
+    } else if(!dtr && !rts){
+        if(lineState == CDC_LINE_3){
+            // log_i("Rebooting...");
+            // esp_restart();
+        } else {
+            lineState = CDC_LINE_IDLE;
+        }
+    }
+    log_d("line state event: dtr=%d, rts=%d, line state=%d", dtr, rts, lineState);
+}
+
+static void usbCdcLineCodingEvent(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    arduino_usb_cdc_event_data_t * data = (arduino_usb_cdc_event_data_t*)event_data;
+    if (data->line_coding.bit_rate == 1200) {
+      log_d("1200bps touch. rebooting.");
+    }
+}
+
+static void usbCdcRxData(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
   arduino_usb_cdc_event_data_t * data = (arduino_usb_cdc_event_data_t*)event_data;
-  switch (event_id) {
-    case ARDUINO_USB_CDC_RX_EVENT:
-      log_d("USB CDC RX %d bytes", data->rx.len);
-      while (usb_cdc.available()) { usb_cdc.read(); }
-      break;
-    default:
-      // log_i("USB CDC event: event_id=%d", event_id);
-      break;
-  }
+  log_d("USB CDC RX %d bytes", data->rx.len);
+  while (usb_cdc.available()) { usb_cdc.read(); }
 }
 
 static void usbVendorEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
@@ -149,6 +187,7 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
             //Send the response in setup stage
             vendor_line_state = request->wValue;
             result = Vendor.sendResponse(rhport, request);
+            Vendor.flush();
           } else if (requestStage == REQUEST_STAGE_ACK) {
             //In the ACK stage the response is complete
             bool dtr = (vendor_line_state & 1) != 0;
@@ -167,9 +206,8 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
   return result;
 }
 
-
 void usb_setup_task(void *arg) {
-  // delay(5000);
+  delay(4000);
 
   esp_reset_reason_t reason = esp_reset_reason();
   if (reason == ESP_RST_PANIC) {
@@ -178,10 +216,12 @@ void usb_setup_task(void *arg) {
     return;
   }
 
-  log_i("Setting up USB");
+  log_i("Setting up USB. Switching log output...");
 
   usb_cdc.enableReboot(true);
-  usb_cdc.onEvent(usbCdcEventCallback);
+  usb_cdc.onEvent(ARDUINO_USB_CDC_LINE_STATE_EVENT, usbCdcLineStateEvent);
+  // usb_cdc.onEvent(ARDUINO_USB_CDC_LINE_CODING_EVENT, usbCdcLineCodingEvent);
+  usb_cdc.onEvent(ARDUINO_USB_CDC_RX_EVENT, usbCdcRxData);
 
   Vendor.onEvent(usbVendorEventCallback);
   Vendor.onRequest(vendorRequestCallback);
@@ -191,14 +231,14 @@ void usb_setup_task(void *arg) {
   usb_cdc.begin();
   Vendor.begin();
   USB.begin();
+
+  // usb_cdc.setDebugOutput(true);
   
   vTaskDelete(NULL);
 }
 
-
 void usb_setup() {
   xTaskCreate(usb_setup_task, "usb_setup", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
 }
-
 
 #endif

@@ -27,9 +27,8 @@
 #ifdef CONFIG_TINYUSB_ENABLED
 #include "tusb.h"
 
-static bool WEBUSB_ENABLED                = true;
 typedef char tusb_str_t[127];
-static tusb_str_t WEBUSB_URL              = "https://google.com";
+static tusb_str_t WEBUSB_URL              = "https://buzzer-controller.vercel.app";
 
 enum
 {
@@ -343,11 +342,20 @@ static tinyusb_desc_webusb_url_t tinyusb_url_descriptor = {
 };
 
 
+extern "C" bool tinyusb_vendor_control_request_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request);
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request)
 {
-    log_v("rhport: %u, stage: %u, type: 0x%x, request: 0x%x", rhport, stage, request->bmRequestType_bit.type, request->bRequest);
-    if(WEBUSB_ENABLED && (request->bRequest == VENDOR_REQUEST_WEBUSB
-            || (request->bRequest == VENDOR_REQUEST_MICROSOFT && request->wIndex == 7))){
+    log_v("Port: %u, Stage: %u, Direction: %u, Type: %u, Recipient: %u, bRequest: 0x%x, wValue: %u, wIndex: %u, wLength: %u", 
+        rhport, stage, request->bmRequestType_bit.direction, 
+        request->bmRequestType_bit.type, request->bmRequestType_bit.recipient, 
+        request->bRequest, request->wValue, request->wIndex, request->wLength);
+
+    // See https://www.beyondlogic.org/usbnutshell/usb6.shtml for bit explanations
+    if(request->bmRequestType_bit.direction == TUSB_DIR_IN &&           // TUSB_DIR_IN = Device-to-host
+       request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR &&       // Type = Vendor 
+       request->bmRequestType_bit.recipient == TUSB_REQ_RCPT_DEVICE &&  // Recipient = Device
+       (request->bRequest == VENDOR_REQUEST_WEBUSB || (request->bRequest == VENDOR_REQUEST_MICROSOFT && request->wIndex == 7))
+      ) {
         // we only care for SETUP stage
         if (stage == CONTROL_STAGE_SETUP) {
             if(request->bRequest == VENDOR_REQUEST_WEBUSB){
@@ -365,7 +373,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
         }
         return true;
     }
-    return false;
+    return tinyusb_vendor_control_request_cb(rhport, stage, request);
 }
 
 
