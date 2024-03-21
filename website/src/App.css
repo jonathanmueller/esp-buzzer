@@ -4,11 +4,31 @@
 
 .App-logo {
   height: 40vmin;
-  pointer-events: none;
   mask-image: url('./buzzer.png');
+  mask: url('./buzzer.png') center center no-repeat;
   mask-size: contain;
   background-color: white;
-  width: 40vmin;
+  aspect-ratio: 1;
+  cursor: pointer;
+  transition: 100ms ease-in-out scale, 500ms ease-in-out height;
+  scale: 1;
+}
+
+.App-logo:hover {
+  scale: 1.1;
+}
+
+.App-logo.connected {
+  background-color: green;
+  height: 10vmin;
+}
+
+.error {
+  color: crimson;
+}
+
+.claimed {
+  color: goldenrod;
 }
 
 @media (prefers-reduced-motion: no-preference) {
