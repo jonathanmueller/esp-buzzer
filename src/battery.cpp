@@ -5,6 +5,7 @@
 
 #include "comm.h"
 #include "battery.h"
+#include "_config.h"
 
 /* Interface */
 uint32_t battery_voltage = 0;
@@ -12,20 +13,6 @@ float battery_percent = 0;
 uint8_t battery_percent_rounded = 0;
 bool low_battery = false;
 bool has_external_power = false;
-
-/* Defines */
-#define BAT_VOLTAGE_PIN D2
-
-#define BAT_VOLTAGE_EXTERNAL_POWER 6000
-
-#define BAT_VOLTAGE_100_PCT 4200
-#define BAT_VOLTAGE_50_PCT 3700
-#define BAT_VOLTAGE_0_PCT 3200
-
-#define BAT_VOLTAGE_FILTER_SIZE 16
-
-#define BATTERY_TASK_DURATION 2 // seconds
-#define LOW_BATTERY_THRESHOLD 0.01
 
 // static RunningAverage battery_running_average(BAT_VOLTAGE_FILTER_SIZE);
 static struct {
@@ -108,6 +95,7 @@ void shutdown(bool turnOffLEDs, bool allowWakeupWithBuzzer) {
         );
 
         current_state = STATE_SHUTDOWN;
+        delay(SHUTDOWN_ANIMATION_DURATION);
         if (turnOffLEDs) {
             FastLED.setBrightness(0);
         }

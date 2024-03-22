@@ -8,7 +8,7 @@
 node_state_t current_state = STATE_IDLE;
 unsigned long buzzer_active_until = 0;
 unsigned long buzzer_disabled_until = 0;
-uint16_t back_button_pressed_since = 0;
+unsigned long back_button_pressed_since = 0;
 uint16_t both_buttons_pressed_for = 0;
 
 bool lastPushedBootButton = false;  /* Whether or not the boot button was pushed last loop iteration */
@@ -29,6 +29,13 @@ void button_setup() {
     // }
 }
 
+inline static void next_color() {
+    buzzer_color = (color_t)((buzzer_color + 1) % COLOR_NUM);
+    if (buzzer_color == COLOR_RGB) {
+        buzzer_color = (color_t)((buzzer_color + 1) % COLOR_NUM);
+    }
+}
+
 
 void config_loop() {
     log_i("Entering config mode");
@@ -40,9 +47,27 @@ void config_loop() {
 
     while (true) {
         if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
-            buzzer_color = (color_t)((buzzer_color + 1) % COLOR_NUM);
             delay(50);
-            while (digitalRead(BUZZER_BUTTON_PIN) == LOW) { yield(); }
+            bool setToRGB = false;
+            unsigned long started_pressing = millis();
+            while (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
+                yield();
+                if ((millis() - started_pressing) > 1000) {
+                    setToRGB = true;
+                    uint8_t hue = rgb2hsv_approximate(buzzer_color == COLOR_RGB ? buzzer_color_rgb : colors[buzzer_color]).h;
+                    buzzer_color = COLOR_RGB;
+                    buzzer_color_rgb = CHSV(hue, 255, 255);
+                    while (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
+                        hue++;
+                        buzzer_color_rgb = CHSV(hue, 255, 255);
+                        delay(50);
+                    }
+                }
+            }
+            if (!setToRGB) {
+                next_color();
+                delay(50);
+            }
             delay(50);
         } else if (digitalRead(BACK_BUTTON_PIN) == LOW) {
             current_state = STATE_IDLE;
@@ -53,26 +78,28 @@ void config_loop() {
 
     /* Save to EEPROM */
     nvm_data.color = buzzer_color;
+    memcpy(nvm_data.rgb, buzzer_color_rgb.raw, 3);
     nvm_save();
 }
 
 void button_loop() {
     unsigned long time = millis();
 
-    static CEveryNMillis debounceBackButton(50);
+    static CEveryNMillis debounceBackButtonRelease(50);
     if (digitalRead(BACK_BUTTON_PIN) == LOW) {
         if (!lastPushedBootButton) {
             back_button_pressed_since = time;
             send_state_update();
         }
         lastPushedBootButton = true;
-        debounceBackButton.reset();
+        debounceBackButtonRelease.reset();
 
         if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
             EVERY_N_MILLIS(100) { both_buttons_pressed_for += 100; }
 
             if (both_buttons_pressed_for > 2000) {
                 config_loop();
+                current_state = STATE_SHOW_BATTERY;
             }
 
             time = millis();
@@ -81,13 +108,13 @@ void button_loop() {
             both_buttons_pressed_for = 0;
         }
         
-        if (time - back_button_pressed_since > 5000) {
+        if (time - back_button_pressed_since > 3000) {
             /* Shutdown */
             log_d("Shutting down...");
             shutdown(true, false);
         }
     } else {
-        if (debounceBackButton) {
+        if (debounceBackButtonRelease) {
             both_buttons_pressed_for = 0;
             lastPushedBootButton = false;
         }

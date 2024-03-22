@@ -5,12 +5,13 @@
 
 CRGB leds[NUM_LEDS];
 color_t buzzer_color = COLOR_ORANGE;
+CRGB buzzer_color_rgb = CRGB::OrangeRed;
 
 CRGB colors[] = {
     CRGB::Red,
-    CRGB::Gold,
+    CRGB::Yellow,
     CRGB::OrangeRed,
-    CRGB::Olive,
+    CRGB::Green,
     CRGB::Teal,
     CRGB::Navy,
     CRGB::Purple,
@@ -27,7 +28,8 @@ void led_setup() {
     fill_solid(leds, NUM_LEDS, 0);
 
     buzzer_color = nvm_data.color;
-    if (buzzer_color >= COLOR_NUM) {
+    buzzer_color_rgb = CRGB(nvm_data.rgb[0], nvm_data.rgb[1], nvm_data.rgb[2]);
+    if (buzzer_color >= COLOR_NUM && buzzer_color != COLOR_RGB) {
         buzzer_color = COLOR_ORANGE;
     }
 
@@ -36,8 +38,10 @@ void led_setup() {
 
 static uint16_t hue = 0;
 static uint8_t angle = 0;
-static unsigned long buzzer_start_time = -1UL;
 static uint8_t number_of_flashes = 0;
+static unsigned long last_state_change = 0;
+static unsigned long time_since_state_change = 0;
+static node_state_t last_state = STATE_IDLE;
 
 void led_task(void* param) {
     CRGB baseColor;
@@ -47,11 +51,17 @@ void led_task(void* param) {
         angle += 1;
         hue += 1;
 
-        baseColor = colors[buzzer_color];
-
-        if (current_state != STATE_BUZZER_ACTIVE) {
-            buzzer_start_time = -1UL;
+        if (buzzer_color == COLOR_RGB) {
+            baseColor = buzzer_color_rgb;
+        } else {
+            baseColor = colors[buzzer_color];
         }
+
+        if (current_state != last_state) {
+            last_state_change = time;
+        }
+        last_state = current_state;
+        time_since_state_change = time - last_state_change;
 
         // if (current_state == STATE_SHUTDOWN) {
         //     fill_solid(leds, NUM_LEDS, 0);
@@ -65,10 +75,15 @@ void led_task(void* param) {
                     fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
                     break;
                 case STATE_CONFIG:
-                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(sin8(millis() / 2) / 4 + 20));
+                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(buzzer_color == COLOR_RGB && digitalRead(BUZZER_BUTTON_PIN) == LOW ? 255 : sin8(millis() / 2) / 6 + 40));
                     break;
                 case STATE_SHUTDOWN:
-                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(1));
+                    {
+                        fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
+                        uint8_t leds_to_shutoff = ((float)time_since_state_change / 2 / SHUTDOWN_ANIMATION_DURATION) * NUM_LEDS;
+                        fill_solid(leds, leds_to_shutoff, 0);
+                        fill_solid(&leds[NUM_LEDS - leds_to_shutoff], leds_to_shutoff, 0);
+                    }
                     break;
                 case STATE_DISABLED:
                     fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(1));
@@ -79,31 +94,28 @@ void led_task(void* param) {
                         leds[i].nscale8_video(sin8(angle + 2*i * 255.0f / NUM_LEDS));
                     }
 
-                    if (buzzer_start_time == -1UL) {
-                        buzzer_start_time = time;
-                        number_of_flashes = 0;
-                    }
-
-                    if (time - buzzer_start_time < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT*FLASH_EFFECT_PRE_FLASH_DURATION)) {
+                    if (time_since_state_change < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT*FLASH_EFFECT_PRE_FLASH_DURATION)) {
                         fract8 fract;
-                        if (time - buzzer_start_time < (FLASH_EFFECT_PRE_FLASH_COUNT*FLASH_EFFECT_PRE_FLASH_DURATION)) {
-                            fract = 255 - (uint8_t)(255.0f * (time - buzzer_start_time) / FLASH_EFFECT_PRE_FLASH_DURATION);
+                        if (time_since_state_change < (FLASH_EFFECT_PRE_FLASH_COUNT*FLASH_EFFECT_PRE_FLASH_DURATION)) {
+                            fract = 255 - (uint8_t)(255.0f * (time_since_state_change) / FLASH_EFFECT_PRE_FLASH_DURATION);
                         } else {
-                            fract = 255 - (255.0f * (time - buzzer_start_time - (FLASH_EFFECT_PRE_FLASH_COUNT*FLASH_EFFECT_PRE_FLASH_DURATION)) / FLASH_EFFECT_DURATION);
+                            fract = 255 - (255.0f * (time_since_state_change - (FLASH_EFFECT_PRE_FLASH_COUNT*FLASH_EFFECT_PRE_FLASH_DURATION)) / FLASH_EFFECT_DURATION);
                         }
                         for (uint8_t i = 0; i < NUM_LEDS; i++) {
                             leds[i] = leds[i].lerp8(FLASH_EFFECT_COLOR, fract);
                         }
                     }
                     break;
-                default:
+                case STATE_SHOW_BATTERY:
                     fill_solid(leds, NUM_LEDS, CRGB(0,0,255));
-
                     for (uint8_t i = 0; i < NUM_LEDS * battery_percent; i++) {
-                        uint8_t gr = i * 255.0f / NUM_LEDS;
-                        leds[i] = CRGB(gr, 255-gr, 0);
+                        uint8_t rg = i * 255.0f / NUM_LEDS;
+                        leds[i] = CRGB(255-rg, rg, 0);
                     }
 
+                    if (time_since_state_change > 2000) {
+                        current_state = STATE_IDLE;
+                    }
                     break;
             }
         }

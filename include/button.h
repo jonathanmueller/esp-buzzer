@@ -1,18 +1,13 @@
 #pragma once
 
-#define BUZZER_ACTIVE_TIME 5000
-#define BUZZER_DISABLED_TIME 3000
-
-
-#define BOOT_BUTTON_PIN D9
-#define BUZZER_BUTTON_PIN D0
-#define BACK_BUTTON_PIN D1
+#include "_config.h"
 
 enum node_state_t : uint8_t {
     STATE_IDLE,
     STATE_DISABLED,
     STATE_BUZZER_ACTIVE,
     STATE_SHUTDOWN,
+    STATE_SHOW_BATTERY,    
     STATE_CONFIG
 };
 

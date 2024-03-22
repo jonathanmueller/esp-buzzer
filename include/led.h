@@ -1,15 +1,8 @@
 #pragma once
+#include "_config.h"
 
 #define FASTLED_INTERNAL
 #include <FastLED.h>
-
-#define LED_PIN D4
-#define NUM_LEDS 14
-
-#define FLASH_EFFECT_COLOR baseColor // CRGB::White
-#define FLASH_EFFECT_PRE_FLASH_COUNT 4
-#define FLASH_EFFECT_PRE_FLASH_DURATION 100
-#define FLASH_EFFECT_DURATION 600
 
 enum color_t : uint8_t {
     COLOR_RED,
@@ -20,10 +13,14 @@ enum color_t : uint8_t {
     COLOR_BLUE,
     COLOR_MAGENTA,
     COLOR_WHITE,
-    COLOR_NUM
+    COLOR_NUM,
+    COLOR_RGB = 255
 };
 
+
 extern color_t buzzer_color;
+extern CRGB buzzer_color_rgb;
+extern CRGB colors[];
 
 extern CRGB leds[NUM_LEDS];
 

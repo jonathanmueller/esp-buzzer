@@ -4,11 +4,7 @@
 #include "button.h"
 #include "esp_now.h"
 #include "led.h"
-
-#define SECONDS_TO_REMEMBER_PEERS 30
-#define ACCOUNCEMENT_INTERVAL_SECONDS 10
-#define SHUTDOWN_TIME_NO_BUZZING    (1000 * 60 * 20)    // 20 minutes without buzzing, even when others are around -> shut down
-#define SHUTDOWN_TIME_NO_COMMS      (1000 * 60 * 5)     // 5 minutes without another nearby buzzer -> shutdown
+#include "_config.h"
 
 #undef CONFIG_ESPNOW_ENCRYPT
 
@@ -49,55 +45,45 @@
 #define ESPNOW_WIFI_MODE WIFI_MODE_STA
 #define ESPNOW_WIFI_IF  WIFI_IF_STA
 
-typedef enum {
-    ESPNOW_SEND_CB,
-    ESPNOW_RECV_CB,
-} espnow_event_id_t;
-
-typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
-    esp_now_send_status_t status;
-} espnow_event_send_cb_t;
-
-typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
-    uint8_t *data;
-    int data_len;
-} espnow_event_recv_cb_t;
-
-typedef union {
-    espnow_event_send_cb_t send_cb;
-    espnow_event_recv_cb_t recv_cb;
-} espnow_event_info_t;
-
-/* When ESPNOW sending or receiving callback function is called, post event to ESPNOW task. */
-typedef struct {
-    espnow_event_id_t id;
-    espnow_event_info_t info;
-} espnow_event_t;
-
-enum {
-    EXAMPLE_ESPNOW_DATA_BROADCAST,
-    EXAMPLE_ESPNOW_DATA_UNICAST,
-    EXAMPLE_ESPNOW_DATA_MAX,
-};
-
 enum espnow_data_type_t : uint8_t {
-    ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,
-    ESP_DATA_TYPE_STATE_UPDATE,
-    ESP_DATA_TYPE_MY_BUZZER_WAS_PRESSED,
+    ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,        /* payload type: payload_node_info_t */
+    ESP_DATA_TYPE_STATE_UPDATE,             /* payload type: payload_node_info_t */
+    ESP_DATA_TYPE_PING_PONG,                /* payload type: payload_ping_pong_t */
+    ESP_DATA_TYPE_COMMAND,
     ESP_DATA_TYPE_MAX
 };
 
+enum node_type_t : uint8_t {
+    NODE_TYPE_BUZZER = 0,
+    NODE_TYPE_CONTROLLER = 1
+};
+
+
 typedef struct {
+    node_type_t node_type;
     uint8_t battery_percent;
     color_t color;
+    uint8_t rgb[3];
     node_state_t current_state;
     uint16_t buzzer_active_remaining_ms;
-}  __attribute__((packed)) node_info_t;
+}  __attribute__((packed)) payload_node_info_t;
+
+enum ping_pong_stage_t : uint8_t {
+    PING_PONG_STAGE_PING,
+    PING_PONG_STAGE_PONG,
+    PING_PONG_STAGE_DATA1,
+    PING_PONG_STAGE_DATA2
+};
+
+typedef struct {
+    ping_pong_stage_t stage;               /* 0: ping, 1: pong, 2: data1, 3: data2 */
+    uint16_t latency_us;                   /* measured latency (data1: ping to pong, data2: pong to data1) */
+    int8_t rssi;                           /* measured latency of last packet */
+}  __attribute__((packed)) payload_ping_pong_t;
 
 typedef union {
-    node_info_t node_info;
+    payload_node_info_t node_info;
+    payload_ping_pong_t ping_pong;
     uint8_t raw[0];
 }  __attribute__((packed)) espnow_data_playload_t;
 
