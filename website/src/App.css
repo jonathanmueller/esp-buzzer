@@ -1,11 +1,6 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  mask-image: url('./buzzer.png');
-  mask: url('./buzzer.png') center center no-repeat;
+.connect-icon {
+  height: 20rem;
+  mask: url('./assets/buzzer.png') center center no-repeat;
   mask-size: contain;
   background-color: white;
   aspect-ratio: 1;
@@ -14,49 +9,38 @@
   scale: 1;
 }
 
-.App-logo:hover {
+.connect-icon:hover {
   scale: 1.1;
 }
 
-.App-logo.connected {
+.connect-icon.connected {
   background-color: green;
   height: 10vmin;
 }
 
-.error {
-  color: crimson;
-}
-
-.claimed {
-  color: goldenrod;
-}
 
 @media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 1s ease-in-out;
+  .connect-icon {
+    /* animation: connect-icon-rotate infinite 1s ease-in-out; */
   }
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
+@keyframes connect-icon-rotate {
 
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  0%, 100% {
+  0%,
+  100% {
     transform: rotate(-2deg);
   }
+
   50% {
     transform: rotate(2deg);
   }
+}
+
+.peer-icon {
+  height: 10rem;
+  aspect-ratio: 1;
+  mask: url('./assets/peer.png') center center no-repeat;
+  mask-size: contain;
+  background-color: var(--color, white);
 }
