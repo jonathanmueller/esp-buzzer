@@ -11,13 +11,12 @@ void nvm_setup() {
         log_i("Initializing EEPROM");
         nvm_data = {
             .MAGIC_BYTE = EEPROM_MAGIC_BYTE,
-            .color = COLOR_ORANGE,
-            .rgb = { 255 , 0 , 0 }
+            .color      = COLOR_ORANGE,
+            .rgb        = { 255, 0, 0 }
         };
         nvm_save();
     }
 }
-
 
 void nvm_save() {
     EEPROM.writeBytes(0, &nvm_data, sizeof(nvm_data_t));

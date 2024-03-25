@@ -5,15 +5,15 @@
 #include "battery.h"
 #include "nvm.h"
 
-node_state_t current_state = STATE_IDLE;
-unsigned long buzzer_active_until = 0;
-unsigned long buzzer_disabled_until = 0;
+node_state_t current_state              = STATE_IDLE;
+unsigned long buzzer_active_until       = 0;
+unsigned long buzzer_disabled_until     = 0;
 unsigned long back_button_pressed_since = 0;
-uint16_t both_buttons_pressed_for = 0;
+uint16_t both_buttons_pressed_for       = 0;
 
-bool lastPushedBootButton = false;  /* Whether or not the boot button was pushed last loop iteration */
-bool lastPushedBuzzerButton = false;  /* Whether or not the buzzer button was pushed last loop iteration */
-uint8_t startup_pins = 0;
+bool lastPushedBootButton   = false; /* Whether or not the boot button was pushed last loop iteration */
+bool lastPushedBuzzerButton = false; /* Whether or not the buzzer button was pushed last loop iteration */
+uint8_t startup_pins        = 0;
 
 void button_setup() {
     pinMode(BOOT_BUTTON_PIN, INPUT);
@@ -36,26 +36,27 @@ inline static void next_color() {
     }
 }
 
-
 void config_loop() {
     log_i("Entering config mode");
     current_state = STATE_CONFIG;
 
     /* Wait for both buttons to be released */
-    while (digitalRead(BUZZER_BUTTON_PIN) == LOW || digitalRead(BACK_BUTTON_PIN) == LOW) { yield(); }
+    while (digitalRead(BUZZER_BUTTON_PIN) == LOW || digitalRead(BACK_BUTTON_PIN) == LOW) {
+        yield();
+    }
     delay(50);
 
     while (true) {
         if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
             delay(50);
-            bool setToRGB = false;
+            bool setToRGB                  = false;
             unsigned long started_pressing = millis();
             while (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
                 yield();
                 if ((millis() - started_pressing) > 1000) {
-                    setToRGB = true;
-                    uint8_t hue = rgb2hsv_approximate(buzzer_color == COLOR_RGB ? buzzer_color_rgb : colors[buzzer_color]).h;
-                    buzzer_color = COLOR_RGB;
+                    setToRGB         = true;
+                    uint8_t hue      = rgb2hsv_approximate(buzzer_color == COLOR_RGB ? buzzer_color_rgb : colors[buzzer_color]).h;
+                    buzzer_color     = COLOR_RGB;
                     buzzer_color_rgb = CHSV(hue, 255, 255);
                     while (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
                         hue++;
@@ -102,12 +103,12 @@ void button_loop() {
                 current_state = STATE_SHOW_BATTERY;
             }
 
-            time = millis();
+            time                      = millis();
             back_button_pressed_since = time; // Reset timer for shutdown if both buttons are pressed
         } else {
             both_buttons_pressed_for = 0;
         }
-        
+
         if (time - back_button_pressed_since > 3000) {
             /* Shutdown */
             log_d("Shutting down...");
@@ -116,16 +117,15 @@ void button_loop() {
     } else {
         if (debounceBackButtonRelease) {
             both_buttons_pressed_for = 0;
-            lastPushedBootButton = false;
+            lastPushedBootButton     = false;
         }
     }
-
 
     static CEveryNMillis debounceBuzzerButton(50);
 
     if (current_state == STATE_BUZZER_ACTIVE && time > buzzer_active_until) {
         log_d("Time's up! On cooldown for a bit.");
-        current_state = STATE_DISABLED;
+        current_state         = STATE_DISABLED;
         buzzer_disabled_until = time + BUZZER_DISABLED_TIME;
     } else if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
         log_d("Re-enabling.");
@@ -136,8 +136,8 @@ void button_loop() {
         if (!lastPushedBuzzerButton) {
             if (current_state == STATE_IDLE) {
                 log_i("BUZZ! Sending state update %d, pins=%d", esp_sleep_get_wakeup_cause(), startup_pins);
-                
-                current_state = STATE_BUZZER_ACTIVE;
+
+                current_state       = STATE_BUZZER_ACTIVE;
                 buzzer_active_until = time + BUZZER_ACTIVE_TIME;
                 send_state_update();
             }

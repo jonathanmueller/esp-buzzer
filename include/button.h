@@ -7,7 +7,7 @@ enum node_state_t : uint8_t {
     STATE_DISABLED,
     STATE_BUZZER_ACTIVE,
     STATE_SHUTDOWN,
-    STATE_SHOW_BATTERY,    
+    STATE_SHOW_BATTERY,
     STATE_CONFIG
 };
 

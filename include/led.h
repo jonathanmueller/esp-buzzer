@@ -17,7 +17,6 @@ enum color_t : uint8_t {
     COLOR_RGB = 255
 };
 
-
 extern color_t buzzer_color;
 extern CRGB buzzer_color_rgb;
 extern CRGB colors[];
