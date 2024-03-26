@@ -1,41 +1,12 @@
 .connect-icon {
-  height: 20rem;
+  height: 10rem;
   mask: url('./assets/buzzer.png') center center no-repeat;
   mask-size: contain;
   background-color: white;
   aspect-ratio: 1;
   cursor: pointer;
-  transition: 100ms ease-in-out scale, 500ms ease-in-out height;
-  scale: 1;
 }
 
-.connect-icon:hover {
-  scale: 1.1;
-}
-
-.connect-icon.connected {
-  background-color: green;
-  height: 10vmin;
-}
-
-
-@media (prefers-reduced-motion: no-preference) {
-  .connect-icon {
-    /* animation: connect-icon-rotate infinite 1s ease-in-out; */
-  }
-}
-
-@keyframes connect-icon-rotate {
-
-  0%,
-  100% {
-    transform: rotate(-2deg);
-  }
-
-  50% {
-    transform: rotate(2deg);
-  }
-}
 
 .peer-icon {
   height: 10rem;

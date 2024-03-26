@@ -82,4 +82,16 @@ export const USB_CODES = {
         0xFF: "Vendor Specific"
     }
 };
+
 export const INTERFACE_CLASS_VENDOR = 0xFF; // Vendor
+
+export const COLORS = {
+    0: 'red',
+    1: 'yellow',
+    2: 'orange',
+    3: 'green',
+    4: 'teal',
+    5: 'blue',
+    6: 'magenta',
+    7: 'white'
+};

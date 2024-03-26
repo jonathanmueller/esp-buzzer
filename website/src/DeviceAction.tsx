@@ -1,5 +1,4 @@
-import { Button } from "@nextui-org/button";
-import { Input } from "@nextui-org/react";
+import { Slider } from "@nextui-org/react";
 import { useEffect, useState } from "react";
 import { DeviceInfo, uint16_t } from "./util";
 
@@ -60,8 +59,8 @@ function DeviceAction(props: DeviceActionProps) {
         return () => { };
     }, []);
 
-    return <div className="flex w-full flex-wrap md:flex-nowrap gap-4 items-end">
-        <Input
+    return <>
+        {/* <Input
             type="number"
             color="default"
             label={description}
@@ -74,7 +73,21 @@ function DeviceAction(props: DeviceActionProps) {
                 <span className="text-default-400 text-small">{endText}</span>
             </div>}
         />
-        <Button color="primary" onClick={() => updateValue(currentValue)}>Update</Button>
-    </div>;
+        <Button color="primary" onClick={() => updateValue(currentValue)}>Update</Button> */}
+        <Slider
+            value={currentValue}
+            minValue={0}
+            maxValue={10000}
+            step={500}
+            className="max-w-[250px]"
+            // showTooltip={true}
+            formatOptions={{ style: "unit", unit: "millisecond" }}
+            // tooltipValueFormatOptions={{ maximumSignificantDigits: 1 }}
+            onChange={value => setCurrentValue(value as number)}
+            onChangeEnd={value => updateValue(value as number)}
+
+            label={description}
+        />
+    </>;
 }
 export default DeviceAction;

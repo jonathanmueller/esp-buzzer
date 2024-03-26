@@ -1,8 +1,9 @@
+import { Divider } from '@nextui-org/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
-import DeviceAction from './DeviceAction';
 import DeviceNetworkInfo from './DeviceNetworkInfo';
+import GameBar from './GameBar';
 import { ConnectedDeviceInfo, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
 
 
@@ -148,10 +149,11 @@ function App() {
   //   color: white;
   // }
   return (
-    <div className="bg-gray-900">
+    <div className='bg-gray-800 '>
       <div className="mx-auto container flex flex-col min-h-screen">
-        <div onClick={onClick} className={classNames("connect-icon self-center", deviceInfo.isConnected && "bg-green-600")} />
-        <div className="text-red-600 font-bold text-center">{error?.message ?? '\u00a0'}</div>
+        <div onClick={onClick} className={classNames("connect-icon self-center transition hover:scale-110", deviceInfo.isConnected && "bg-green-600")} />
+        <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div>
+        <Divider className="my-5" />
         {device && <div className="hidden">
           {device.configurations.map((config, i, configs) => <React.Fragment key={i}>
             {configs.length > 1 && <h1>{config.configurationName ?? "Configuration"} ({config.configurationValue})</h1>}
@@ -169,9 +171,7 @@ function App() {
 
 
         {device && deviceInfo.isConnected && <div>
-          {/* <button onClick={() => setRefreshDevice({})}>Refresh Device Info</button> */}
-          <DeviceAction description="Ping Interval" endText="ms" deviceInfo={deviceInfo} handleError={handleError} />
-          {/* <button onClick={() => {device.controlOut}} /> */}
+          <GameBar deviceInfo={deviceInfo} handleError={handleError} />
 
           <DeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
 

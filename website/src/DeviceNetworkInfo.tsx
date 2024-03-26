@@ -1,8 +1,9 @@
-import { Tooltip } from '@nextui-org/react';
+import { Button, Card, CardBody, CardFooter, CardHeader, Chip, Divider, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Popover, PopoverContent, PopoverTrigger, Spinner, Switch, Tooltip } from '@nextui-org/react';
 import { Buffer } from 'buffer';
 import classNames from "classnames";
-import { useCallback, useEffect, useState } from "react";
-import { Reception0, Reception1, Reception2, Reception3, Reception4 } from 'react-bootstrap-icons';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowClockwise, InfoCircle, Palette, Power, Reception0, Reception1, Reception2, Reception3, Reception4 } from 'react-bootstrap-icons';
+import { CirclePicker } from 'react-color';
 import { DeviceInfo, arr_peer_data_t, isBroadcastMac, node_info_t, node_state_t, peer_data_t } from "./util";
 
 
@@ -12,7 +13,9 @@ export type DeviceNetworkInfoProps = {
 };
 
 type PeerInfoProps = {
-    peer: peer_data_t;
+    deviceInfo: DeviceInfo,
+    peer: peer_data_t,
+    handleError: (e: any) => void;
 };
 
 enum color_t {
@@ -43,11 +46,13 @@ function colorFromPeerInfo(node_info: node_info_t) {
         const rgb = node_info.rgb;
         return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     }
-    return colorMap[node_info.color as keyof typeof colorMap] ?? '';
+    return colorMap[node_info.color as keyof typeof colorMap] ?? 'transparent';
 }
 
 
 function getReceptionIcon(rssi: number) {
+    if (rssi === 0) return <Reception0 />;
+
     if (rssi > -70) return <Reception4 className="text-green-600" />;
     if (rssi > -85) return <Reception3 className="text-yellow-300" />;
     if (rssi > -100) return <Reception2 className="text-yellow-600" />;
@@ -71,42 +76,107 @@ function getBatteryIcon(battery: number) {
     </svg>;
 }
 
+
 export function PeerInfo(props: PeerInfoProps) {
-    const { peer } = props;
+    const { peer, deviceInfo, handleError } = props;
     const color = colorFromPeerInfo(peer.node_info);
+    const [showColorPicker, setShowColorPicker] = useState(false);
+
+    const sendCommand = useCallback((data: number[]) =>
+        deviceInfo.device.controlTransferOut({
+            requestType: "vendor",
+            recipient: "device",
+            request: 0x30,  // Command
+            value: 0,
+            index: 0
+        }, new Uint8Array([...peer.mac_addr, ...data]))
+            .then(result => {
+                console.log("result ", result);
+            })
+            .catch(handleError),
+        [deviceInfo, peer]);
+
+    const buzz = useCallback(() => sendCommand([0x30]), [sendCommand]);
+    const [active, _setActive] = useState(peer.node_info.current_state != 1);
+    useEffect(() => { if (peer.node_info.current_state != 1) { _setActive(true); } }, [peer.node_info.current_state]);
+    const setActive = useCallback((active: boolean) => { sendCommand([active ? 0x32 : 0x31]); _setActive(active); }, [sendCommand]);
+
+    const menuActions = useMemo(() => ({
+        "setColor": () => setTimeout(() => setShowColorPicker(true), 100),
+        "reset": () => sendCommand([0x40]),
+        "shutdown": () => sendCommand([0x50])
+    }), []);
+
     return <>
-        <div className={classNames("border-1 p-4 rounded-xl", peer.node_info.current_state == node_state_t.STATE_BUZZER_ACTIVE && " ring-8 ring-yellow-300")} style={{ "--color": color } as React.CSSProperties}>
-            <div className="flex gap-3">
-                <span className="text-sm flex-grow">{peer.latency_us === 0 ? '-' : `${(peer.latency_us / 1000).toFixed(1)}ms`}</span>
-                <Tooltip content={peer.rssi === 0 ? '-' : `${peer.rssi}dBm`}><span className="flex gap-2 items-baseline">{getReceptionIcon(peer.rssi)}</span></Tooltip>
-                <Tooltip content={peer.node_info.battery_percent === 0 ? '-' : `${peer.node_info.battery_percent}%`}><span className="flex gap-2 items-baseline">{getBatteryIcon(peer.node_info.battery_percent)}</span></Tooltip>
-            </div>
-            <div className="peer-icon" />
-            <div className="text-center text-foreground-400 text-sm">{Array.from(peer.mac_addr).map(x => x.toString(16).padStart(2, '0')).join(":")}<br /></div>
-        </div>
-        {/* <pre style={{ textAlign: 'left', lineBreak: 'anywhere', textWrap: 'wrap' }}>
-            {JSON.stringify(peer)}
-        </pre> */}
+        <Card className={classNames("transition",
+            peer.node_info.current_state == node_state_t.STATE_BUZZER_ACTIVE && "ring-4 ring-white scale-110 z-10",
+            peer.node_info.current_state == node_state_t.STATE_DISABLED && "opacity-50"
+        )} style={{ "--color": color } as React.CSSProperties}>
+            <CardHeader className="flex gap-3">
+                <Tooltip showArrow content={<span>
+                    MAC: {Array.from(peer.mac_addr).map(x => x.toString(16).padStart(2, '0')).join(":")}<br />
+                </span>}>
+                    <InfoCircle className="text-foreground-500" />
+                </Tooltip>
+                <span className="flex-grow" />
+                <Chip size="sm" variant='flat'>{peer.latency_us === 0 ? '\u2013 ' : `${(peer.latency_us / 1000).toFixed(1)}`}ms</Chip>
+                <Tooltip showArrow content={peer.rssi === 0 ? '-' : `${peer.rssi}dBm`}>{getReceptionIcon(peer.rssi)}</Tooltip>
+                <Tooltip showArrow content={peer.node_info.battery_percent === 0 ? '-' : `${peer.node_info.battery_percent}%`}>{getBatteryIcon(peer.node_info.battery_percent)}</Tooltip>
+            </CardHeader>
+            <Divider />
+
+            <CardBody>
+                <Button
+                    className=" mx-auto m-5 w-40 h-auto rounded-full aspect-square shadow-md shadow-black ring-2 ring-white bg-[var(--color)]"
+                    onPress={buzz} />
+            </CardBody>
+
+            <Divider />
+            <CardFooter className="flex flex-row flex-nowrap gap-3 items-center py-0">
+                <Switch className="py-3" size="sm" defaultSelected isSelected={active} onValueChange={setActive}>Aktiv</Switch>
+                <Divider orientation="vertical" />
+
+
+                <Dropdown className='dark text-foreground'>
+                    <DropdownTrigger>
+                        <Button variant="light" className="px-5">
+                            Optionen
+                        </Button>
+                    </DropdownTrigger>
+                    <DropdownMenu onAction={key => menuActions[key as keyof typeof menuActions]()} aria-label="Buzzer Optionen">
+                        <DropdownItem showDivider key="setColor" startContent={<Palette />}>Farbe</DropdownItem>
+                        <DropdownItem key="reset" startContent={<ArrowClockwise />}>Reset</DropdownItem>
+                        <DropdownItem key="shutdown" className="text-danger" color='danger' startContent={<Power />}>Ausschalten</DropdownItem>
+                    </DropdownMenu>
+                </Dropdown>
+                <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showColorPicker} onOpenChange={(open) => setShowColorPicker(open)}>
+                    <PopoverTrigger><span></span></PopoverTrigger>
+                    <PopoverContent className="p-5">
+                        <CirclePicker color={color} onChange={v => sendCommand([0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
+                    </PopoverContent>
+                </Popover>
+            </CardFooter>
+        </Card>
     </>;
 }
 
 
 
 export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
-    const { deviceInfo: { device }, handleError } = props;
+    const { deviceInfo, handleError } = props;
+    const { device } = deviceInfo;
+
     const [peers, setPeers] = useState<peer_data_t[]>([]);
 
     const fetchValue = useCallback(async () => {
-        console.log("fetching network info");
         await device.controlTransferIn({
             requestType: "vendor",
             recipient: "device",
-            request: 32,
+            request: 0x20,
             value: 0,
             index: 0
         }, peer_data_t.baseSize * 20)
             .then(result => {
-                console.log("network info response", result);
                 if (result.data) {
                     const buf = Buffer.from(result.data.buffer);
                     const peers = new arr_peer_data_t(buf).peer_data_t;
@@ -120,14 +190,15 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
 
     useEffect(() => {
         fetchValue();
-        const interval = setInterval(fetchValue, 2000);
+        const interval = setInterval(fetchValue, 500);
         return () => {
             clearInterval(interval);
         };
     }, [fetchValue]);
 
     return <div className="mt-5 flex gap-5">
-        {peers.map((peer, i) => <PeerInfo key={i} peer={peer} />)}
+        {peers.map((peer, i) => <PeerInfo key={i} deviceInfo={deviceInfo} peer={peer} handleError={handleError} />)}
+        {peers.length == 0 && <Card><CardBody><Spinner size="sm" color="white" label="Searching..." /></CardBody></Card>}
     </div>;
 }
 
