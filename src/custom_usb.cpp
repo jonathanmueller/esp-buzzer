@@ -8,6 +8,15 @@
 #include "comm.h"
 #include "tusb.h"
 
+/* The arduino macros are wrong and not compatible with the TinyUSB macros */
+#undef REQUEST_STAGE_SETUP
+#undef REQUEST_STAGE_DATA
+#undef REQUEST_STAGE_ACK
+
+// #define REQUEST_STAGE_SETUP CONTROL_STAGE_SETUP
+// #define REQUEST_STAGE_DATA CONTROL_STAGE_DATA
+// #define REQUEST_STAGE_ACK CONTROL_STAGE_ACK
+
 USBCDC usb_cdc;
 USBVendor Vendor;
 
@@ -127,10 +136,7 @@ static void usbVendorEventCallback(void *arg, esp_event_base_t event_base, int32
 enum USB_REQUEST_VENDOR_DEVICE : uint8_t {
     USB_REQUEST_VENDOR_DEVICE_CONFIG       = 0x10,
     USB_REQUEST_VENDOR_DEVICE_NETWORK_INFO = 0x20,
-};
-
-enum USB_REQUEST_VENDOR_DEVICE_CONFIG_VALUE : uint8_t {
-    USB_REQUEST_VENDOR_DEVICE_CONFIG_VALUE_PING_INTERVAL = 0x10,
+    USB_REQUEST_VENDOR_DEVICE_SEND_COMMAND = 0x30,
 };
 
 static const char *strRequestDirections[] = { "OUT", "IN" };
@@ -140,9 +146,12 @@ static const char *strRequestStages[]     = { "SETUP", "DATA", "ACK" };
 
 // Handle USB requests to the vendor interface
 bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_control_request_t const *request) {
-    if (requestStage != CONTROL_STAGE_SETUP) {
-        return true;
-    }
+    // if (requestStage != CONTROL_STAGE_SETUP) {
+    //     if (requestStage == REQUEST_STAGE_ACK) {
+    //         log_d("ack %2x", request->bRequest);
+    //     }
+    //     return true;
+    // }
 
     // if (requestStage == REQUEST_STAGE_DATA) {
     log_v("Vendor Request.\nStage: %5s, Direction: %3s, Type: %8s, Recipient: %9s, bRequest: 0x%02x, wValue: 0x%04x, wIndex: %u, wLength: %u",
@@ -160,8 +169,10 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
         request->bmRequestRecipient == REQUEST_RECIPIENT_DEVICE) {
         switch ((USB_REQUEST_VENDOR_DEVICE)request->bRequest) {
             case USB_REQUEST_VENDOR_DEVICE_CONFIG:
-                switch ((USB_REQUEST_VENDOR_DEVICE_CONFIG_VALUE)request->wValue) {
-                    case USB_REQUEST_VENDOR_DEVICE_CONFIG_VALUE_PING_INTERVAL:
+                if (requestStage != CONTROL_STAGE_SETUP) { return true; }
+
+                switch ((command_t)request->wValue) {
+                    case COMMAND_SET_PING_INTERVAL:
                         if (request->wLength != sizeof(pingInterval)) {
                             log_d("invalid length %d, expected %d", request->wLength, sizeof(pingInterval));
                             break;
@@ -182,7 +193,9 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                 }
                 break;
             case USB_REQUEST_VENDOR_DEVICE_NETWORK_INFO:
-                if ((request->wLength != sizeof(peer_data_t) && request->wLength != sizeof(peer_data)) || request->wIndex >= ESP_NOW_MAX_TOTAL_PEER_NUM) {
+                if (requestStage != CONTROL_STAGE_SETUP) { return true; }
+
+                if ((request->wLength != sizeof(peer_data_t) && request->wLength != sizeof(peer_data_table)) || request->wIndex >= ESP_NOW_MAX_TOTAL_PEER_NUM) {
                     log_v("invalid length %d, expected %d", request->wLength, sizeof(peer_data_t));
                     break;
                 }
@@ -190,10 +203,28 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                 log_v("sending %d byte response", sizeof(peer_data_t));
                 cleanup_peer_list();
                 if (request->wLength == sizeof(peer_data_t)) {
-                    result = Vendor.sendResponse(rhport, request, &peer_data[request->wIndex], sizeof(peer_data_t));
-                } else if (request->wLength == sizeof(peer_data)) {
-                    result = Vendor.sendResponse(rhport, request, &peer_data, sizeof(peer_data));
+                    result = Vendor.sendResponse(rhport, request, &peer_data_table[request->wIndex], sizeof(peer_data_t));
+                } else if (request->wLength == sizeof(peer_data_table)) {
+                    result = Vendor.sendResponse(rhport, request, &peer_data_table, sizeof(peer_data_table));
                 }
+                break;
+            case USB_REQUEST_VENDOR_DEVICE_SEND_COMMAND:
+                if (request->wLength < 7 || request->bmRequestDirection != REQUEST_DIRECTION_OUT) {
+                    break;
+                }
+
+                static struct {
+                    uint8_t dst_mac_addr[6];
+                    payload_command_t command;
+                } __attribute__((packed)) command_to_send;
+                result = true;
+
+                if (requestStage == CONTROL_STAGE_SETUP) {
+                    result = Vendor.sendResponse(rhport, request, &command_to_send, request->wLength);
+                } else if (requestStage == CONTROL_STAGE_ACK) {
+                    executeCommand(command_to_send.dst_mac_addr, &command_to_send.command, request->wLength - sizeof(command_to_send.dst_mac_addr));
+                }
+
                 break;
             default:
                 result = false;
@@ -203,7 +234,7 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                request->bmRequestType == REQUEST_TYPE_STANDARD &&
                request->bmRequestRecipient == REQUEST_RECIPIENT_INTERFACE &&
                request->bRequest == 0x0b) {
-        if (requestStage == REQUEST_STAGE_SETUP) {
+        if (requestStage == CONTROL_STAGE_SETUP) {
             // response with status OK
             result = Vendor.sendResponse(rhport, request);
         } else {
@@ -218,10 +249,10 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                     if (request->wLength != sizeof(request_line_coding_t) || request->bmRequestDirection != REQUEST_DIRECTION_OUT) {
                         break;
                     }
-                    if (requestStage == REQUEST_STAGE_SETUP) {
+                    if (requestStage == CONTROL_STAGE_SETUP) {
                         // Send the response in setup stage (it will write the data to vendor_line_coding in the DATA stage)
                         result = Vendor.sendResponse(rhport, request, (void *)&vendor_line_coding, sizeof(request_line_coding_t));
-                    } else if (requestStage == REQUEST_STAGE_ACK) {
+                    } else if (requestStage == CONTROL_STAGE_ACK) {
                         // In the ACK stage the response is complete
                         log_i("Vendor Line Coding: bit_rate: %lu, data_bits: %u, stop_bits: %u, parity: %u\n", vendor_line_coding.bit_rate, vendor_line_coding.data_bits, vendor_line_coding.stop_bits, vendor_line_coding.parity);
                     }
@@ -233,7 +264,7 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                     if (request->wLength != sizeof(request_line_coding_t) || request->bmRequestDirection != REQUEST_DIRECTION_IN) {
                         break;
                     }
-                    if (requestStage == REQUEST_STAGE_SETUP) {
+                    if (requestStage == CONTROL_STAGE_SETUP) {
                         // Send the response in setup stage (it will write the data to vendor_line_coding in the DATA stage)
                         result = Vendor.sendResponse(rhport, request, (void *)&vendor_line_coding, sizeof(request_line_coding_t));
                     }
@@ -245,12 +276,12 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                     if (request->wLength != 0 || request->bmRequestDirection != REQUEST_DIRECTION_OUT) {
                         break;
                     }
-                    if (requestStage == REQUEST_STAGE_SETUP) {
+                    if (requestStage == CONTROL_STAGE_SETUP) {
                         // Send the response in setup stage
                         vendor_line_state = request->wValue;
                         result            = Vendor.sendResponse(rhport, request);
                         Vendor.flush();
-                    } else if (requestStage == REQUEST_STAGE_ACK) {
+                    } else if (requestStage == CONTROL_STAGE_ACK) {
                         // In the ACK stage the response is complete
                         bool dtr = (vendor_line_state & 1) != 0;
                         bool rts = (vendor_line_state & 2) != 0;

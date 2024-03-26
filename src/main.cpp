@@ -24,9 +24,10 @@ void setup(void) {
 
     nvm_setup();
     battery_setup();
-    comm_setup();
     button_setup();
     led_setup();
+
+    comm_setup();
 }
 
 void loop() {

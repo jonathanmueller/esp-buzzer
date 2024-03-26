@@ -83,6 +83,15 @@ void config_loop() {
     nvm_save();
 }
 
+void buzz() {
+    log_i("BUZZ! Sending state update");
+
+    unsigned long time  = millis();
+    current_state       = STATE_BUZZER_ACTIVE;
+    buzzer_active_until = time + BUZZER_ACTIVE_TIME;
+    send_state_update();
+}
+
 void button_loop() {
     unsigned long time = millis();
 
@@ -125,21 +134,21 @@ void button_loop() {
 
     if (current_state == STATE_BUZZER_ACTIVE && time > buzzer_active_until) {
         log_d("Time's up! On cooldown for a bit.");
-        current_state         = STATE_DISABLED;
-        buzzer_disabled_until = time + BUZZER_DISABLED_TIME;
+        current_state = STATE_DISABLED;
+        if (buzzer_disabled_until != -1UL) {
+            buzzer_disabled_until = time + BUZZER_DISABLED_TIME;
+        }
+        send_state_update();
     } else if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
         log_d("Re-enabling.");
         current_state = STATE_IDLE;
+        send_state_update();
     }
 
     if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
         if (!lastPushedBuzzerButton) {
             if (current_state == STATE_IDLE) {
-                log_i("BUZZ! Sending state update %d, pins=%d", esp_sleep_get_wakeup_cause(), startup_pins);
-
-                current_state       = STATE_BUZZER_ACTIVE;
-                buzzer_active_until = time + BUZZER_ACTIVE_TIME;
-                send_state_update();
+                buzz();
             }
         }
         lastPushedBuzzerButton = true;

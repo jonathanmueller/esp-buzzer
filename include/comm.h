@@ -78,7 +78,7 @@ typedef struct {
     payload_node_info_t node_info;      // The peer's last known node info (i.e. state)
 } __attribute__((packed)) peer_data_t;
 
-extern peer_data_t peer_data[ESP_NOW_MAX_TOTAL_PEER_NUM];
+extern peer_data_t peer_data_table[ESP_NOW_MAX_TOTAL_PEER_NUM];
 
 enum ping_pong_stage_t : uint8_t {
     PING_PONG_STAGE_PING,
@@ -93,16 +93,38 @@ typedef struct {
     int8_t rssi;             /* measured latency of last packet */
 } __attribute__((packed)) payload_ping_pong_t;
 
+enum command_t : uint8_t {
+    COMMAND_SET_PING_INTERVAL = 0x10,
+    COMMAND_SET_COLOR         = 0x20,
+    COMMAND_BUZZ              = 0x30,
+    COMMAND_SET_INACTIVE      = 0x31,
+    COMMAND_SET_ACTIVE        = 0x32,
+    COMMAND_RESET             = 0x40,
+    COMMAND_SHUTDOWN          = 0x50
+};
+
+typedef struct {
+    command_t command;
+    union {
+        struct {
+            color_t color;
+            uint8_t rgb[3];
+        } __attribute__((packed)) set_color;
+        uint8_t raw[0];
+    } __attribute__((packed)) args;
+} __attribute__((packed)) payload_command_t;
+
 typedef union {
     payload_node_info_t node_info;
     payload_ping_pong_t ping_pong;
+    payload_command_t command;
     uint8_t raw[0];
-} __attribute__((packed)) espnow_data_playload_t;
+} __attribute__((packed)) espnow_data_payload_t;
 
 /* User defined field of ESPNOW data in this example. */
 typedef struct {
     espnow_data_type_t type;
-    espnow_data_playload_t payload;
+    espnow_data_payload_t payload;
 } __attribute__((packed)) espnow_data_t;
 
 #ifdef __cplusplus
@@ -112,6 +134,7 @@ extern "C" {
 void cleanup_peer_list();
 void comm_setup();
 void send_state_update();
+boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t len);
 
 #ifdef __cplusplus
 }

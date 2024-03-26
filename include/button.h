@@ -17,3 +17,4 @@ extern unsigned long buzzer_disabled_until;
 
 void button_setup();
 void button_loop();
+void buzz();

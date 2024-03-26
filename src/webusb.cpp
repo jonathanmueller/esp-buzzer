@@ -235,24 +235,17 @@ static inline size_t board_usb_get_serial(uint16_t desc_str1[], size_t max_chars
     uint8_t uid[16] TU_ATTR_ALIGNED(4);
     size_t uid_len;
 
-    if (true) {
-        uint64_t mac = ESP.getEfuseMac();
-        uid[0]       = (mac >> 56) & 0xFF;
-        uid[1]       = (mac >> 48) & 0xFF;
-        uid[2]       = (mac >> 40) & 0xFF;
-        uid[3]       = (mac >> 32) & 0xFF;
-        uid[4]       = (mac >> 24) & 0xFF;
-        uid[5]       = (mac >> 16) & 0xFF;
-        uid[6]       = (mac >> 8) & 0xFF;
-        uid[7]       = (mac >> 0) & 0xFF;
-        uid_len      = 8;
-    } else {
-        // fixed serial string is 01234567889ABCDEF
-        uint32_t *uid32 = (uint32_t *)(uintptr_t)uid;
-        uid32[0]        = 0x67452301;
-        uid32[1]        = 0xEFCDAB89;
-        uid_len         = 8;
-    }
+    uint64_t mac = ESP.getEfuseMac();
+
+    uid[0]  = (mac >> 56) & 0xFF;
+    uid[1]  = (mac >> 48) & 0xFF;
+    uid[2]  = (mac >> 40) & 0xFF;
+    uid[3]  = (mac >> 32) & 0xFF;
+    uid[4]  = (mac >> 24) & 0xFF;
+    uid[5]  = (mac >> 16) & 0xFF;
+    uid[6]  = (mac >> 8) & 0xFF;
+    uid[7]  = (mac >> 0) & 0xFF;
+    uid_len = 8;
 
     if (uid_len > max_chars / 2) uid_len = max_chars / 2;
 

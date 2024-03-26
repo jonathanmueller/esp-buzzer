@@ -21,6 +21,7 @@
 #include <map>
 #include "FastLED.h"
 #include "button.h"
+#include <nvm.h>
 
 #define ESPNOW_MAXDELAY         512
 #define ESPNOW_QUEUE_SIZE       10
@@ -32,7 +33,7 @@ static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xF
 
 uint16_t pingInterval = DEFAULT_PING_INTERVAL;
 
-peer_data_t peer_data[ESP_NOW_MAX_TOTAL_PEER_NUM];
+peer_data_t peer_data_table[ESP_NOW_MAX_TOTAL_PEER_NUM];
 
 static espnow_data_t s_my_broadcast_info = {
     .type    = ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,
@@ -185,8 +186,8 @@ void send_ping(const uint8_t *mac_addr) {
         },
     };
 
-    peer_data->last_sent_ping_us = micros();
-    esp_err_t ret                = esp_now_send(mac_addr, (const uint8_t *)&ping, sizeof(ping));
+    peer_data_table->last_sent_ping_us = micros();
+    esp_err_t ret                      = esp_now_send(mac_addr, (const uint8_t *)&ping, sizeof(ping));
     if (ret == ESP_OK) {
         log_v("Pinging %2x:%2x:%2x:%2x:%2x:%2x", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     } else {
@@ -200,8 +201,8 @@ static esp_err_t get_peer_info(const uint8_t *mac_addr, peer_data_t **data) {
     }
 
     for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
-        if (memcmp(peer_data[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
-            *data = &peer_data[i];
+        if (memcmp(peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
+            *data = &peer_data_table[i];
             return ESP_OK;
         }
     }
@@ -215,18 +216,18 @@ static esp_err_t get_or_create_peer_info(const uint8_t *mac_addr, peer_data_t **
     }
 
     for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
-        if (memcmp(peer_data[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
-            *data = &peer_data[i];
+        if (memcmp(peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
+            *data = &peer_data_table[i];
             return ESP_OK;
         }
     }
 
     for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
-        if (memcmp(peer_data[i].mac_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0) {
-            memset(&peer_data[i], 0, sizeof(peer_data_t));
-            memcpy(&peer_data[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
+        if (memcmp(peer_data_table[i].mac_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0) {
+            memset(&peer_data_table[i], 0, sizeof(peer_data_t));
+            memcpy(&peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
 
-            *data = &(peer_data[i]);
+            *data = &(peer_data_table[i]);
             return ESP_OK;
         }
     }
@@ -239,8 +240,8 @@ static esp_err_t remove_peer_info(const uint8_t *mac_addr) {
         return ESP_ERR_ESPNOW_ARG;
     }
     for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
-        if (memcmp(peer_data[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
-            memset(peer_data[i].mac_addr, 0xFF, ESP_NOW_ETH_ALEN);
+        if (memcmp(peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
+            memset(peer_data_table[i].mac_addr, 0xFF, ESP_NOW_ETH_ALEN);
             return ESP_OK;
         }
     }
@@ -250,33 +251,120 @@ static esp_err_t remove_peer_info(const uint8_t *mac_addr) {
 
 void cleanup_peer_list() {
     unsigned long time = millis();
-    bool head          = true;
-    esp_now_peer_info_t peer;
-    peer_data_t *peer_data;
-    while (esp_now_fetch_peer(head, &peer) == ESP_OK) {
-        head = false;
+    {
+        bool head = true;
+        esp_now_peer_info_t peer;
+        peer_data_t *peer_data;
+        while (esp_now_fetch_peer(head, &peer) == ESP_OK) {
+            head = false;
 
-        if (get_peer_info(peer.peer_addr, &peer_data) == ESP_OK) {
-            unsigned long timeSinceLastSeen = time - peer_data->last_seen;
-            if (timeSinceLastSeen > SECONDS_TO_REMEMBER_PEERS * 1000) {
-                log_d("Removing peer " MACSTR ", last seen %.1fs ago.", MAC2STR(peer.peer_addr), timeSinceLastSeen / 1000.0f);
-                ESP_ERROR_CHECK(esp_now_del_peer(peer.peer_addr));
-                remove_peer_info(peer.peer_addr);
-            } else {
-                // log_d("Peer: " MACSTR " last seen %.1fs ago, keeping.", MAC2STR(peer.peer_addr), timeSinceLastSeen / 1000.0f);
+            if (get_peer_info(peer.peer_addr, &peer_data) == ESP_OK) {
+                unsigned long timeSinceLastSeen = time - peer_data->last_seen;
+                if (timeSinceLastSeen > SECONDS_TO_REMEMBER_PEERS * 1000) {
+                    log_d("Removing peer " MACSTR ", last seen %.1fs ago.", MAC2STR(peer.peer_addr), timeSinceLastSeen / 1000.0f);
+                    ESP_ERROR_CHECK(esp_now_del_peer(peer.peer_addr));
+                    remove_peer_info(peer.peer_addr);
+                } else {
+                    // log_d("Peer: " MACSTR " last seen %.1fs ago, keeping.", MAC2STR(peer.peer_addr), timeSinceLastSeen / 1000.0f);
+                }
             }
         }
     }
 
     for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
-        if (peer_data[i].node_info.current_state == STATE_BUZZER_ACTIVE && peer_data[i].node_info.buzzer_active_remaining_ms + peer_data[i].last_seen > time) {
-            peer_data[i].node_info.current_state = STATE_IDLE;
+        /* If the peer must be disabled by now, update */
+        if (peer_data_table[i].node_info.current_state == STATE_BUZZER_ACTIVE && (peer_data_table[i].node_info.buzzer_active_remaining_ms + peer_data_table[i].last_seen) < time) {
+            peer_data_table[i].node_info.current_state = STATE_IDLE;
         }
     }
 
-    esp_now_peer_num_t peer_num;
-    ESP_ERROR_CHECK(esp_now_get_peer_num(&peer_num));
-    log_v("Number of known peers is now: %d", peer_num.total_num - 1);
+    {
+        esp_now_peer_num_t peer_num;
+        ESP_ERROR_CHECK(esp_now_get_peer_num(&peer_num));
+        log_v("Number of known peers is now: %d", peer_num.total_num - 1);
+    }
+}
+
+boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t len) {
+    if (mac_addr != NULL &&
+        (mac_addr[0] != 0 ||
+         mac_addr[0] != 0 ||
+         mac_addr[0] != 0 ||
+         mac_addr[0] != 0 ||
+         mac_addr[0] != 0 ||
+         mac_addr[0] != 0)) {
+        /* Don't execute here, but on peer node */
+        log_v("Received a command for another peer.");
+
+        espnow_data_t relayed_command = {
+            .type = ESP_DATA_TYPE_COMMAND
+        };
+
+        memcpy(&relayed_command.payload.command, command, len);
+
+        esp_err_t ret = esp_now_send(mac_addr, (uint8_t *)&relayed_command, sizeof(relayed_command));
+        if (ret == ESP_OK) {
+            log_d("Relaying command...");
+        } else {
+            log_e("Send error: %s", esp_err_to_name(ret));
+        }
+
+        return true;
+    }
+
+    log_v("Received a command for me.");
+
+    /* Execute command */
+    switch (command->command) {
+        case COMMAND_SET_COLOR:
+            {
+                color_t color = command->args.set_color.color;
+                if (color == COLOR_RGB) {
+                    nvm_data.color = color;
+                    memcpy(nvm_data.rgb, command->args.set_color.rgb, 3);
+
+                    buzzer_color     = nvm_data.color;
+                    buzzer_color_rgb = CRGB(nvm_data.rgb[0], nvm_data.rgb[1], nvm_data.rgb[2]);
+
+                    nvm_save();
+                    send_state_update();
+                    return true;
+                } else if (color < COLOR_NUM) {
+                    nvm_data.color = color;
+                    buzzer_color   = nvm_data.color;
+                    nvm_save();
+                    send_state_update();
+                    return true;
+                }
+                return false;
+            }
+            break;
+        case COMMAND_BUZZ:
+            buzz();
+            return true;
+        case COMMAND_SET_INACTIVE:
+            current_state         = STATE_DISABLED;
+            buzzer_disabled_until = -1UL;
+            send_state_update();
+            return true;
+        case COMMAND_SET_ACTIVE:
+            current_state         = STATE_IDLE;
+            buzzer_disabled_until = 0;
+            send_state_update();
+            return true;
+        case COMMAND_RESET:
+            log_d("Received restart command.");
+            esp_restart();
+            return true;
+        case COMMAND_SHUTDOWN:
+            log_d("Received shutdown command.");
+            shutdown(true, false);
+            return true;
+        default:
+            log_d("Unknown command received (id=%d)", command->command);
+            break;
+    }
+    return false;
 }
 
 static void comm_task(void *pvParameter) {
@@ -323,7 +411,7 @@ static void comm_task(void *pvParameter) {
                                     payload_node_info_t *node_info = &data->payload.node_info;
                                     log_v("Task Stack High Water Mark: %d", uxTaskGetStackHighWaterMark(NULL));
 
-                                    log_d("Received node state from " MACSTR ": color=%d, currentState=%d, battery=%d%%", MAC2STR(recv_cb->mac_addr), node_info->color, node_info->current_state, node_info->battery_percent);
+                                    log_d("Received node state from " MACSTR ": type=%d, color=%d, currentState=%d, battery=%d%%", MAC2STR(recv_cb->mac_addr), node_info->node_type, node_info->color, node_info->current_state, node_info->battery_percent);
 
                                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
                                         /* If MAC address does not exist in peer list, add it to peer list. */
@@ -354,13 +442,17 @@ static void comm_task(void *pvParameter) {
                                             log_d("Received buzz from other node. Disabling for %dms", node_info->buzzer_active_remaining_ms);
                                         }
                                     }
+
+                                    if (node_info->node_type == NODE_TYPE_CONTROLLER) {
+                                        time_of_last_keep_alive_communication = time; // When a controller is present -> prevent sleeping
+                                    }
                                 }
                                 break;
 
                             case ESP_DATA_TYPE_PING_PONG:
                                 {
                                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
-                                        log_d("Ignoring ping from unknown peer %2x:%2x:%2x:%2x:%2x:%2x", recv_cb->mac_addr[0], recv_cb->mac_addr[1], recv_cb->mac_addr[2], recv_cb->mac_addr[3], recv_cb->mac_addr[4], recv_cb->mac_addr[5]);
+                                        log_v("Ignoring ping from unknown peer %2x:%2x:%2x:%2x:%2x:%2x", recv_cb->mac_addr[0], recv_cb->mac_addr[1], recv_cb->mac_addr[2], recv_cb->mac_addr[3], recv_cb->mac_addr[4], recv_cb->mac_addr[5]);
                                         break;
                                     }
 
@@ -393,15 +485,16 @@ static void comm_task(void *pvParameter) {
                                         peer_data->last_sent_ping_us = time_us;
 
                                         if (stage > PING_PONG_STAGE_PONG) {
-                                            log_d("Connection info: %2x:%2x:%2x:%2x:%2x:%2x: latency: %dus, rssi=%d", recv_cb->mac_addr[0], recv_cb->mac_addr[1], recv_cb->mac_addr[2], recv_cb->mac_addr[3], recv_cb->mac_addr[4], recv_cb->mac_addr[5], peer_data->latency_us, peer_data->rssi);
+                                            log_v("Connection info: %2x:%2x:%2x:%2x:%2x:%2x: latency: %dus, rssi=%d", recv_cb->mac_addr[0], recv_cb->mac_addr[1], recv_cb->mac_addr[2], recv_cb->mac_addr[3], recv_cb->mac_addr[4], recv_cb->mac_addr[5], peer_data->latency_us, peer_data->rssi);
                                         }
                                     }
                                 }
                                 break;
                             case ESP_DATA_TYPE_COMMAND:
+                                executeCommand(NULL, &data->payload.command, recv_cb->data_len - sizeof(espnow_data_type_t));
                                 break;
                             default:
-                                log_d("Unknown data packet received (type=%d)", data->type);
+                                log_e("Unknown data packet received (type=%d)", data->type);
                                 break;
                         }
 
@@ -470,7 +563,7 @@ static esp_err_t espnow_init(void) {
 
     /* init peer data */
     for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
-        memset(peer_data[i].mac_addr, 0xFF, ESP_NOW_ETH_ALEN);
+        memset(peer_data_table[i].mac_addr, 0xFF, ESP_NOW_ETH_ALEN);
     }
 
     /* Initialize ESPNOW and register sending and receiving callback function. */
