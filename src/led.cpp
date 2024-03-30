@@ -39,7 +39,6 @@ void led_setup() {
 static uint16_t hue                          = 0;
 static uint8_t angle                         = 0;
 static uint8_t number_of_flashes             = 0;
-static unsigned long last_state_change       = 0;
 static unsigned long time_since_state_change = 0;
 static node_state_t last_state               = STATE_IDLE;
 
@@ -63,9 +62,6 @@ void led_task(void *param) {
         last_state              = current_state;
         time_since_state_change = time - last_state_change;
 
-        // if (current_state == STATE_SHUTDOWN) {
-        //     fill_solid(leds, NUM_LEDS, 0);
-        // } else
         if (low_battery) {
             fill_solid(leds, NUM_LEDS, (millis() / 100) % 2 == 0 ? CRGB(20, 0, 0) : 0);
         } else {
@@ -114,7 +110,7 @@ void led_task(void *param) {
                     }
 
                     if (time_since_state_change > 2000) {
-                        current_state = STATE_IDLE;
+                        set_state(STATE_IDLE);
                     }
                     break;
             }

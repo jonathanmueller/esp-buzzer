@@ -22,6 +22,7 @@
 #define BUZZER_DISABLED_TIME             3000
 
 // Comm
+#define VERSION_CODE                     0x10      // Increment in case of breaking struct changes in communication
 #define SECONDS_TO_REMEMBER_PEERS        30
 #define ACCOUNCEMENT_INTERVAL_SECONDS    10
 #define SHUTDOWN_TIME_NO_BUZZING_SECONDS (60 * 20) // 20 minutes without buzzing, even when others are around -> shut down

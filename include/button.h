@@ -11,10 +11,16 @@ enum node_state_t : uint8_t {
     STATE_CONFIG
 };
 
+struct game_config_t {
+};
+
 extern node_state_t current_state;
+extern unsigned long last_state_change;
+
 extern unsigned long buzzer_active_until;
 extern unsigned long buzzer_disabled_until;
 
 void button_setup();
 void button_loop();
+void set_state(node_state_t state);
 void buzz();

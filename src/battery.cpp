@@ -91,7 +91,7 @@ void shutdown(bool turnOffLEDs, bool allowWakeupWithBuzzer) {
         (allowWakeupWithBuzzer ? (1 << BUZZER_BUTTON_PIN) : 0) | (esp_sleep_is_valid_wakeup_gpio((gpio_num_t)BACK_BUTTON_PIN) ? (1 << BACK_BUTTON_PIN) : 0),
         ESP_GPIO_WAKEUP_GPIO_LOW);
 
-    current_state = STATE_SHUTDOWN;
+    set_state(STATE_SHUTDOWN);
     delay(SHUTDOWN_ANIMATION_DURATION);
     if (turnOffLEDs) {
         FastLED.setBrightness(0);

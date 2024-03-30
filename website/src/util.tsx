@@ -15,6 +15,7 @@ export enum node_state_t {
 };
 
 export const node_info_t = new Struct('node_info_t')
+    .UInt8('version')
     .UInt8('node_type')
     .UInt8('battery_percent')
     .UInt8('color')
@@ -30,6 +31,7 @@ export const peer_data_t = new Struct('peer_data_t')
     .UInt32LE('last_sent_ping_us')
     .UInt16LE('latency_us')
     .Int8('rssi')
+    .Boolean8('valid_version')
     .Struct('node_info', node_info_t)
     .compile();
 export type peer_data_t = ExtractType<typeof peer_data_t>;

@@ -79,7 +79,7 @@ function getBatteryIcon(battery: number) {
 
 export function PeerInfo(props: PeerInfoProps) {
     const { peer, deviceInfo, handleError } = props;
-    const color = colorFromPeerInfo(peer.node_info);
+    const color = peer.valid_version ? colorFromPeerInfo(peer.node_info) : 'gray';
     const [showColorPicker, setShowColorPicker] = useState(false);
 
     const sendCommand = useCallback((data: number[]) =>
@@ -119,27 +119,32 @@ export function PeerInfo(props: PeerInfoProps) {
                     <InfoCircle className="text-foreground-500" />
                 </Tooltip>
                 <span className="flex-grow" />
-                <Chip size="sm" variant='flat'>{peer.latency_us === 0 ? '\u2013 ' : `${(peer.latency_us / 1000).toFixed(1)}`}ms</Chip>
+                {!peer.valid_version && <>
+                    <Chip color="danger" size='sm'>Falsche SW-Version</Chip>
+                    <span className="flex-grow" />
+                </>}
+                {peer.valid_version && <Chip size="sm" variant='flat'>{peer.latency_us === 0 ? '\u2013 ' : `${(peer.latency_us / 1000).toFixed(1)}`}ms</Chip>}
                 <Tooltip showArrow content={peer.rssi === 0 ? '-' : `${peer.rssi}dBm`}>{getReceptionIcon(peer.rssi)}</Tooltip>
-                <Tooltip showArrow content={peer.node_info.battery_percent === 0 ? '-' : `${peer.node_info.battery_percent}%`}>{getBatteryIcon(peer.node_info.battery_percent)}</Tooltip>
+                {peer.valid_version && <Tooltip showArrow content={peer.node_info.battery_percent === 0 ? '-' : `${peer.node_info.battery_percent}%`}>{getBatteryIcon(peer.node_info.battery_percent)}</Tooltip>}
             </CardHeader>
             <Divider />
 
             <CardBody>
                 <Button
+                    isDisabled={!peer.valid_version}
                     className=" mx-auto m-5 w-40 h-auto rounded-full aspect-square shadow-md shadow-black ring-2 ring-white bg-[var(--color)]"
                     onPress={buzz} />
             </CardBody>
 
             <Divider />
             <CardFooter className="flex flex-row flex-nowrap gap-3 items-center py-0">
-                <Switch className="py-3" size="sm" defaultSelected isSelected={active} onValueChange={setActive}>Aktiv</Switch>
+                <Switch className="py-3" size="sm" defaultSelected isSelected={active} isDisabled={!peer.valid_version} onValueChange={setActive}>Aktiv</Switch>
                 <Divider orientation="vertical" />
 
 
                 <Dropdown className='dark text-foreground'>
                     <DropdownTrigger>
-                        <Button variant="light" className="px-5">
+                        <Button variant="light" className="px-5" isDisabled={!peer.valid_version}>
                             Optionen
                         </Button>
                     </DropdownTrigger>
@@ -196,7 +201,17 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
         };
     }, [fetchValue]);
 
+    const sendVendor = useCallback(() => {
+        console.log("aaa");
+        device
+            .transferOut(deviceInfo.endpointOut.endpointNumber, new Uint8Array([1, 2, 3, 4]))
+            .then(_ => device.transferIn(deviceInfo.endpointIn.endpointNumber, 2))
+            .then(result => console.log(result))
+            .catch(handleError);
+    }, []);
+
     return <div className="mt-5 flex gap-5">
+        <Button onPress={() => sendVendor()}>Send Test</Button>
         {peers.map((peer, i) => <PeerInfo key={i} deviceInfo={deviceInfo} peer={peer} handleError={handleError} />)}
         {peers.length == 0 && <Card><CardBody><Spinner size="sm" color="white" label="Searching..." /></CardBody></Card>}
     </div>;

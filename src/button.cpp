@@ -6,6 +6,7 @@
 #include "nvm.h"
 
 node_state_t current_state              = STATE_IDLE;
+unsigned long last_state_change         = 0;
 unsigned long buzzer_active_until       = 0;
 unsigned long buzzer_disabled_until     = 0;
 unsigned long back_button_pressed_since = 0;
@@ -14,6 +15,11 @@ uint16_t both_buttons_pressed_for       = 0;
 bool lastPushedBootButton   = false; /* Whether or not the boot button was pushed last loop iteration */
 bool lastPushedBuzzerButton = false; /* Whether or not the buzzer button was pushed last loop iteration */
 uint8_t startup_pins        = 0;
+
+void set_state(node_state_t state) {
+    current_state     = state;
+    last_state_change = millis();
+}
 
 void button_setup() {
     pinMode(BOOT_BUTTON_PIN, INPUT);
@@ -38,7 +44,7 @@ inline static void next_color() {
 
 void config_loop() {
     log_i("Entering config mode");
-    current_state = STATE_CONFIG;
+    set_state(STATE_CONFIG);
 
     /* Wait for both buttons to be released */
     while (digitalRead(BUZZER_BUTTON_PIN) == LOW || digitalRead(BACK_BUTTON_PIN) == LOW) {
@@ -71,7 +77,7 @@ void config_loop() {
             }
             delay(50);
         } else if (digitalRead(BACK_BUTTON_PIN) == LOW) {
-            current_state = STATE_IDLE;
+            set_state(STATE_IDLE);
             break;
         }
         yield();
@@ -86,8 +92,8 @@ void config_loop() {
 void buzz() {
     log_i("BUZZ! Sending state update");
 
-    unsigned long time  = millis();
-    current_state       = STATE_BUZZER_ACTIVE;
+    unsigned long time = millis();
+    set_state(STATE_BUZZER_ACTIVE);
     buzzer_active_until = time + BUZZER_ACTIVE_TIME;
     send_state_update();
 }
@@ -109,7 +115,7 @@ void button_loop() {
 
             if (both_buttons_pressed_for > 2000) {
                 config_loop();
-                current_state = STATE_SHOW_BATTERY;
+                set_state(STATE_SHOW_BATTERY);
             }
 
             time                      = millis();
@@ -134,14 +140,14 @@ void button_loop() {
 
     if (current_state == STATE_BUZZER_ACTIVE && time > buzzer_active_until) {
         log_d("Time's up! On cooldown for a bit.");
-        current_state = STATE_DISABLED;
+        set_state(STATE_DISABLED);
         if (buzzer_disabled_until != -1UL) {
             buzzer_disabled_until = time + BUZZER_DISABLED_TIME;
         }
         send_state_update();
     } else if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
         log_d("Re-enabling.");
-        current_state = STATE_IDLE;
+        set_state(STATE_IDLE);
         send_state_update();
     }
 

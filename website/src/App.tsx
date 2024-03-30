@@ -1,6 +1,6 @@
 import { Divider } from '@nextui-org/react';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import DeviceNetworkInfo from './DeviceNetworkInfo';
 import GameBar from './GameBar';
@@ -31,6 +31,8 @@ function getDeviceInfo(device?: USBDevice): UnconnectedDeviceInfo | ConnectedDev
 function App() {
   const [error, setError] = useState<Error>();
   const [device, setDevice] = useState<USBDevice>();
+  const deviceRef = useRef(device);
+  useEffect(() => { deviceRef.current = device; }, [device]);
 
   const [refreshDevice, setRefreshDevice] = useState({});
 
@@ -59,15 +61,27 @@ function App() {
     })();
   }, []);
 
+
+
   useEffect(() => {
     const onConnect = (e: USBConnectionEvent) => {
-      if (device === null) {
+      if (deviceRef.current === undefined) {
         setDevice(e.device);
-        // connectToDevice();
+      }
+    };
+    const onDisconnect = (e: USBConnectionEvent) => {
+      console.log("on disconnect", e.device === deviceRef.current);
+      if (e.device === deviceRef.current) {
+        setDevice(undefined);
       }
     };
     navigator.usb.addEventListener("connect", onConnect);
-    return () => navigator.usb.removeEventListener("connect", onConnect);
+    navigator.usb.addEventListener("disconnect", onDisconnect);
+
+    return () => {
+      navigator.usb.removeEventListener("connect", onConnect);
+      navigator.usb.removeEventListener("disconnect", onDisconnect);
+    };
   }, []);
 
   const onClick = async () => {
@@ -86,13 +100,13 @@ function App() {
 
   useEffect(() => {
     const connectToDevice = async (device?: USBDevice) => {
+      setError(undefined);
+
       if (device === undefined) {
         return;
       }
 
       try {
-        setError(undefined);
-
         try {
           await device.open();
         } catch (e) {
@@ -138,16 +152,6 @@ function App() {
     };
   }, [device]);
 
-  // .App-header {
-  //   background-color: #282c34;
-  //   min-height: 100vh;
-  //   display: flex;
-  //   flex-direction: column;
-  //   align-items: center;
-  //   justify-content: center;
-  //   font-size: calc(10px + 2vmin);
-  //   color: white;
-  // }
   return (
     <div className='bg-gray-800 '>
       <div className="mx-auto container flex flex-col min-h-screen">

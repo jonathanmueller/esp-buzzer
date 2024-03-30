@@ -61,6 +61,7 @@ enum node_type_t : uint8_t {
 };
 
 typedef struct {
+    uint8_t version; /* Must match CONFIG_VERSION */
     node_type_t node_type;
     uint8_t battery_percent;
     color_t color;
@@ -75,6 +76,7 @@ typedef struct {
     unsigned long last_sent_ping_us;    // Last micros() that we sent a ping to this peer
     uint16_t latency_us;                // The RTT latency in us
     int8_t rssi;                        // The RSSI
+    boolean valid_version;              // Whether or not the peer has a valid version (i.e. communication is possible)
     payload_node_info_t node_info;      // The peer's last known node info (i.e. state)
 } __attribute__((packed)) peer_data_t;
 

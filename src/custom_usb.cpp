@@ -7,6 +7,7 @@
 #include "USBVendor.h"
 #include "comm.h"
 #include "tusb.h"
+#include "esp32-hal-tinyusb.h"
 
 /* The arduino macros are wrong and not compatible with the TinyUSB macros */
 #undef REQUEST_STAGE_SETUP
@@ -19,6 +20,11 @@
 
 USBCDC usb_cdc;
 USBVendor Vendor;
+
+/* Hack to get to private member itf */
+struct _USBVendor : public Stream {
+    uint8_t itf;
+};
 
 // CDC Control Requests
 #define REQUEST_SET_LINE_CODING        0x20
@@ -116,21 +122,16 @@ static void usbCdcRxData(void *arg, esp_event_base_t event_base, int32_t event_i
     }
 }
 
-static void usbVendorEventCallback(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+static void vendorDataCallback(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     arduino_usb_vendor_event_data_t *data = (arduino_usb_vendor_event_data_t *)event_data;
-    switch (event_id) {
-        case ARDUINO_USB_VENDOR_DATA_EVENT:
-            log_d("WebUSB RX %d bytes", data->data.len);
+    log_d("WebUSB RX %d bytes", data->data.len);
 
-            while (Vendor.available()) {
-                Vendor.write(Vendor.read());
-            }
-            Vendor.flush();
-            break;
-
-        default:
-            break;
+    while (Vendor.available()) {
+        Vendor.write(Vendor.read());
     }
+
+    // Workaround, because Vendor.flush() is not implemented
+    tud_vendor_n_write_flush(((_USBVendor *)&Vendor)->itf);
 }
 
 enum USB_REQUEST_VENDOR_DEVICE : uint8_t {
@@ -316,7 +317,7 @@ void usb_setup_task(void *arg) {
     // usb_cdc.onEvent(ARDUINO_USB_CDC_LINE_CODING_EVENT, usbCdcLineCodingEvent);
     usb_cdc.onEvent(ARDUINO_USB_CDC_RX_EVENT, usbCdcRxData);
 
-    Vendor.onEvent(usbVendorEventCallback);
+    Vendor.onEvent(ARDUINO_USB_VENDOR_DATA_EVENT, vendorDataCallback);
     Vendor.onRequest(vendorRequestCallback);
 
     USB.onEvent(usbEventCallback);

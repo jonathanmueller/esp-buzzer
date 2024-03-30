@@ -150,6 +150,7 @@ static void espnow_recv_cb(const uint8_t *src_addr, const uint8_t *data, int len
 void send_state_update() {
     unsigned long time                    = millis();
     s_my_broadcast_info.payload.node_info = {
+        .version                    = VERSION_CODE,
         .node_type                  = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
         .battery_percent            = battery_percent_rounded,
         .color                      = buzzer_color,
@@ -169,27 +170,6 @@ void send_state_update() {
     esp_err_t ret = esp_now_send(s_broadcast_mac, (const uint8_t *)&s_my_broadcast_info, sizeof(s_my_broadcast_info));
     if (ret == ESP_OK) {
         log_d("Broadcasting node information.");
-    } else {
-        log_e("Send error: %s", esp_err_to_name(ret));
-    }
-}
-
-void send_ping(const uint8_t *mac_addr) {
-    espnow_data_t ping = {
-        .type    = ESP_DATA_TYPE_PING_PONG,
-        .payload = {
-            .ping_pong = {
-                .stage      = PING_PONG_STAGE_PING,
-                .latency_us = 0,
-                .rssi       = 0,
-            },
-        },
-    };
-
-    peer_data_table->last_sent_ping_us = micros();
-    esp_err_t ret                      = esp_now_send(mac_addr, (const uint8_t *)&ping, sizeof(ping));
-    if (ret == ESP_OK) {
-        log_v("Pinging %2x:%2x:%2x:%2x:%2x:%2x", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     } else {
         log_e("Send error: %s", esp_err_to_name(ret));
     }
@@ -247,6 +227,30 @@ static esp_err_t remove_peer_info(const uint8_t *mac_addr) {
     }
 
     return ESP_ERR_ESPNOW_NOT_FOUND;
+}
+
+void send_ping(const uint8_t *mac_addr) {
+    espnow_data_t ping = {
+        .type    = ESP_DATA_TYPE_PING_PONG,
+        .payload = {
+            .ping_pong = {
+                .stage      = PING_PONG_STAGE_PING,
+                .latency_us = 0,
+                .rssi       = 0,
+            },
+        },
+    };
+
+    peer_data_t *peer_data;
+    ESP_ERROR_CHECK(get_or_create_peer_info(mac_addr, &peer_data));
+    peer_data->last_sent_ping_us = micros();
+
+    esp_err_t ret = esp_now_send(mac_addr, (const uint8_t *)&ping, sizeof(ping));
+    if (ret == ESP_OK) {
+        log_v("Pinging %2x:%2x:%2x:%2x:%2x:%2x", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+    } else {
+        log_e("Send error: %s", esp_err_to_name(ret));
+    }
 }
 
 void cleanup_peer_list() {
@@ -358,7 +362,7 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
             return true;
         case COMMAND_SHUTDOWN:
             log_d("Received shutdown command.");
-            shutdown(true, false);
+            shutdown(true, true);
             return true;
         default:
             log_d("Unknown command received (id=%d)", command->command);
@@ -413,22 +417,29 @@ static void comm_task(void *pvParameter) {
 
                                     log_d("Received node state from " MACSTR ": type=%d, color=%d, currentState=%d, battery=%d%%", MAC2STR(recv_cb->mac_addr), node_info->node_type, node_info->color, node_info->current_state, node_info->battery_percent);
 
+                                    boolean notSeenBefore = false;
                                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
+                                        notSeenBefore = true;
                                         /* If MAC address does not exist in peer list, add it to peer list. */
                                         esp_now_peer_info_t *peer = malloc_peer_info(recv_cb->mac_addr);
                                         log_v("Adding peer to list (" MACSTR ").", MAC2STR(peer->peer_addr));
                                         ESP_ERROR_CHECK(esp_now_add_peer(peer));
                                         free(peer);
-
-                                        /* Ping when we first see them */
-                                        send_ping(recv_cb->mac_addr);
                                     }
 
                                     peer_data_t *peer_data;
                                     ESP_ERROR_CHECK(get_or_create_peer_info(recv_cb->mac_addr, &peer_data));
 
-                                    peer_data->last_seen = time;
-                                    memcpy(&peer_data->node_info, node_info, sizeof(payload_node_info_t));
+                                    peer_data->last_seen     = time;
+                                    peer_data->valid_version = (node_info->version == VERSION_CODE);
+                                    if (peer_data->valid_version) {
+                                        memcpy(&peer_data->node_info, node_info, sizeof(payload_node_info_t));
+                                    }
+
+                                    if (notSeenBefore) {
+                                        /* Ping when we first see them */
+                                        send_ping(recv_cb->mac_addr);
+                                    }
 
                                     // Handle state data
                                     if (current_state != STATE_BUZZER_ACTIVE &&
@@ -458,7 +469,7 @@ static void comm_task(void *pvParameter) {
 
                                     ping_pong_stage_t stage = data->payload.ping_pong.stage;
                                     peer_data_t *peer_data;
-                                    if (get_peer_info(recv_cb->mac_addr, &peer_data) == ESP_OK) {
+                                    if (get_peer_info(recv_cb->mac_addr, &peer_data) == ESP_OK && peer_data->valid_version) {
                                         unsigned long time_us = micros();
                                         if (stage > PING_PONG_STAGE_PING) {
                                             peer_data->latency_us = min(65535UL, time_us - peer_data->last_sent_ping_us);
@@ -536,7 +547,7 @@ static void comm_task(void *pvParameter) {
                             continue;
                         }
 
-                        if (get_peer_info(peer.peer_addr, &peer_data) == ESP_OK) {
+                        if (get_peer_info(peer.peer_addr, &peer_data) == ESP_OK && peer_data->valid_version) {
                             send_ping(peer.peer_addr);
                             break;
                         }
@@ -612,9 +623,10 @@ typedef struct
 } wifi_ieee80211_packet_t;
 
 void promiscuous_rx_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
-    // All espnow traffic uses action frames which are a subtype of the mgmnt frames so filter out everything else.
-    if (type != WIFI_PKT_MGMT)
+    if (type != WIFI_PKT_MGMT) {
+        /* Should never happen because we are filtering */
         return;
+    }
 
     static const uint8_t ACTION_SUBTYPE  = 0xd0;
     static const uint8_t ESPRESSIF_OUI[] = { 0x18, 0xfe, 0x34 };
@@ -650,6 +662,9 @@ void comm_setup(void) {
     ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
 
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+
+    wifi_promiscuous_filter_t filter = { .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT };
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&filter));
 
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&promiscuous_rx_cb));
 
