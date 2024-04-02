@@ -46,6 +46,7 @@
 #define ESPNOW_WIFI_IF   WIFI_IF_STA
 
 extern uint16_t pingInterval;
+extern uint8_t s_broadcast_mac[6];
 
 enum espnow_data_type_t : uint8_t {
     ESP_DATA_TYPE_JOIN_ANNOUNCEMENT, /* payload type: payload_node_info_t */
@@ -98,11 +99,12 @@ typedef struct {
 enum command_t : uint8_t {
     COMMAND_SET_PING_INTERVAL = 0x10,
     COMMAND_SET_COLOR         = 0x20,
+    COMMAND_SET_GAME_CONFIG   = 0x21,
     COMMAND_BUZZ              = 0x30,
     COMMAND_SET_INACTIVE      = 0x31,
     COMMAND_SET_ACTIVE        = 0x32,
     COMMAND_RESET             = 0x40,
-    COMMAND_SHUTDOWN          = 0x50
+    COMMAND_SHUTDOWN          = 0x50,
 };
 
 typedef struct {
@@ -112,6 +114,7 @@ typedef struct {
             color_t color;
             uint8_t rgb[3];
         } __attribute__((packed)) set_color;
+        game_config_t game_config;
         uint8_t raw[0];
     } __attribute__((packed)) args;
 } __attribute__((packed)) payload_command_t;

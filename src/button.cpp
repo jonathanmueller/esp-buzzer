@@ -94,7 +94,7 @@ void buzz() {
 
     unsigned long time = millis();
     set_state(STATE_BUZZER_ACTIVE);
-    buzzer_active_until = time + BUZZER_ACTIVE_TIME;
+    buzzer_active_until = time + nvm_data.game_config.buzzer_active_time;
     send_state_update();
 }
 
@@ -142,7 +142,7 @@ void button_loop() {
         log_d("Time's up! On cooldown for a bit.");
         set_state(STATE_DISABLED);
         if (buzzer_disabled_until != -1UL) {
-            buzzer_disabled_until = time + BUZZER_DISABLED_TIME;
+            buzzer_disabled_until = time + nvm_data.game_config.deactivation_time_after_buzzing;
         }
         send_state_update();
     } else if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
@@ -152,7 +152,7 @@ void button_loop() {
     }
 
     if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
-        if (!lastPushedBuzzerButton) {
+        if (!lastPushedBuzzerButton || !nvm_data.game_config.must_release_before_pressing) {
             if (current_state == STATE_IDLE) {
                 buzz();
             }

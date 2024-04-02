@@ -8,6 +8,7 @@
 #include "comm.h"
 #include "tusb.h"
 #include "esp32-hal-tinyusb.h"
+#include <nvm.h>
 
 /* The arduino macros are wrong and not compatible with the TinyUSB macros */
 #undef REQUEST_STAGE_SETUP
@@ -135,6 +136,7 @@ static void vendorDataCallback(void *arg, esp_event_base_t event_base, int32_t e
 }
 
 enum USB_REQUEST_VENDOR_DEVICE : uint8_t {
+    USB_REQUEST_VENDOR_DEVICE_VERSION      = 0x00,
     USB_REQUEST_VENDOR_DEVICE_CONFIG       = 0x10,
     USB_REQUEST_VENDOR_DEVICE_NETWORK_INFO = 0x20,
     USB_REQUEST_VENDOR_DEVICE_SEND_COMMAND = 0x30,
@@ -165,15 +167,24 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
 
     bool result = false;
 
-    if ( // request->bmRequestDirection == REQUEST_DIRECTION_OUT &&
-        request->bmRequestType == REQUEST_TYPE_VENDOR &&
+    if (request->bmRequestType == REQUEST_TYPE_VENDOR &&
         request->bmRequestRecipient == REQUEST_RECIPIENT_DEVICE) {
         switch ((USB_REQUEST_VENDOR_DEVICE)request->bRequest) {
-            case USB_REQUEST_VENDOR_DEVICE_CONFIG:
+            case USB_REQUEST_VENDOR_DEVICE_VERSION:
+                static uint8_t versionCode = VERSION_CODE;
+
+                if (request->bmRequestDirection == REQUEST_DIRECTION_OUT || request->wLength != sizeof(versionCode)) { return false; }
                 if (requestStage != CONTROL_STAGE_SETUP) { return true; }
+
+                result = Vendor.sendResponse(rhport, request, (void *)&versionCode, sizeof(versionCode));
+
+                break;
+            case USB_REQUEST_VENDOR_DEVICE_CONFIG:
 
                 switch ((command_t)request->wValue) {
                     case COMMAND_SET_PING_INTERVAL:
+                        if (requestStage != CONTROL_STAGE_SETUP) { return true; }
+
                         if (request->wLength != sizeof(pingInterval)) {
                             log_d("invalid length %d, expected %d", request->wLength, sizeof(pingInterval));
                             break;
@@ -185,6 +196,35 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                             log_v("received new pingInterval: %d", pingInterval);
                         } else {
                             log_v("sent pinginterval: %d", pingInterval);
+                        }
+
+                        break;
+
+                    case COMMAND_SET_GAME_CONFIG:
+                        if (request->wLength != sizeof(game_config_t)) {
+                            log_d("invalid length %d, expected %d", request->wLength, sizeof(game_config_t));
+                            break;
+                        }
+
+                        if (request->bmRequestDirection == REQUEST_DIRECTION_IN) {
+                            if (requestStage != CONTROL_STAGE_SETUP) { return true; }
+                            result = Vendor.sendResponse(rhport, request, (void *)&nvm_data.game_config, sizeof(game_config_t));
+                        } else {
+                            static payload_command_t game_config_command = {
+                                .command = COMMAND_SET_GAME_CONFIG,
+                            };
+
+                            if (requestStage == CONTROL_STAGE_SETUP) {
+                                result = Vendor.sendResponse(rhport, request, (void *)&game_config_command.args.game_config, sizeof(game_config_t));
+                            } else if (requestStage == CONTROL_STAGE_ACK) {
+                                result = true;
+
+                                executeCommand(NULL, &game_config_command, sizeof(payload_command_t));
+                                executeCommand(s_broadcast_mac, &game_config_command, sizeof(payload_command_t));
+
+                            } else {
+                                result = true;
+                            }
                         }
 
                         break;

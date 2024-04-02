@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css';
 import DeviceNetworkInfo from './DeviceNetworkInfo';
 import GameBar from './GameBar';
-import { ConnectedDeviceInfo, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
+import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
 
 
 function getDeviceInfo(device?: USBDevice): UnconnectedDeviceInfo | ConnectedDeviceInfo {
@@ -32,10 +32,12 @@ function App() {
   const [error, setError] = useState<Error>();
   const [device, setDevice] = useState<USBDevice>();
   const deviceRef = useRef(device);
-  useEffect(() => { deviceRef.current = device; }, [device]);
+
+  const [deviceVersion, setDeviceVersion] = useState<number>();
 
   const [refreshDevice, setRefreshDevice] = useState({});
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const deviceInfo = useMemo(() => getDeviceInfo(device), [device, device?.opened, refreshDevice]);
 
   const handleError = useCallback((e: Error) => {
@@ -50,13 +52,10 @@ function App() {
   }, [setError]);
 
   useEffect(() => {
-    if (device) { return; }
-
     (async () => {
       let devices = await navigator.usb.getDevices();
       if (devices && devices.length) {
         setDevice(devices[0]);
-        // connectToDevice();
       }
     })();
   }, []);
@@ -86,7 +85,7 @@ function App() {
 
   const onClick = async () => {
     if (!device) {
-      setDevice(await navigator.usb.requestDevice({ filters: [{ vendorId: 0xcafe }] }).catch(e => undefined));
+      setDevice(await navigator.usb.requestDevice({ filters: [{ vendorId: 0xcafe }] }).catch(_ => undefined));
       // connectToDevice();
     } else {
       try {
@@ -98,64 +97,72 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    const connectToDevice = async (device?: USBDevice) => {
-      setError(undefined);
 
-      if (device === undefined) {
-        return;
-      }
+  const connectToDevice = useCallback(async (device?: USBDevice) => {
+    setError(undefined);
 
+    if (device === undefined) {
+      return;
+    }
+
+    try {
       try {
-        try {
-          await device.open();
-        } catch (e) {
-          try { await device.close(); } catch (e) { }
-          await new Promise((res, _) => setTimeout(res, 100));
-          await device.open();
-        }
-
-        // await device.selectConfiguration(1);
-        console.log("Claiming ", deviceInfo.vendorInterface?.interfaceNumber, deviceInfo);
-        await device.claimInterface(deviceInfo.vendorInterface?.interfaceNumber ?? 0);
-
-        console.log(device);
-
-        // await device.transferOut(endpointIn.endpointNumber, encoder.encode("Dies ist ein Teststring"));
-
-        device.transferIn(deviceInfo.endpointOut?.endpointNumber ?? 0, 10).then((result) => {
-          const decoder = new TextDecoder();
-          console.log("Received: " + decoder.decode(result.data));
-        })
-          .catch(handleError);
-
-        // device.controlTransferIn(endpointIn.endpointNumber, 10).then(result => {
-        //   const decoder = new TextDecoder();
-        //   console.log("Received status: " + result.status + ", data: " + decoder.decode(result.data));
-        // })
-        // .catch(e => {
-        //   if (e.name === "AbortError") { /* Ignore */ }
-        //   else { throw e; }
-        // })
-        // .catch(e => setError(e));
-
-        setRefreshDevice({});
-
-      } catch (e: any) {
-        handleError(e);
+        await device.open();
+      } catch (e) {
+        try { await device.close(); } catch (e) { }
+        await new Promise((res, _) => setTimeout(res, 100));
+        await device.open();
       }
-    };
+
+      const deviceInfo = getDeviceInfo(device);
+
+      // await device.selectConfiguration(1);
+      console.log("Claiming interface ", deviceInfo.vendorInterface?.interfaceNumber, deviceInfo);
+      await device.claimInterface(deviceInfo.vendorInterface?.interfaceNumber ?? 0);
+
+
+      const versionInfo = await device.controlTransferIn({
+        requestType: "vendor",
+        recipient: "device",
+        request: 0x00,
+        value: 0x00,
+        index: 0
+      }, 1);
+
+      const version = versionInfo.data?.getUint8(0);
+      setDeviceVersion(version);
+
+      setRefreshDevice({});
+
+    } catch (e: any) {
+      handleError(e);
+    }
+  }, [handleError]);
+
+  useEffect(() => {
+    deviceRef.current = device;
+    setDeviceVersion(undefined);
     connectToDevice(device);
 
     return () => {
       device?.close().catch(_ => { });
+      setDeviceVersion(undefined);
     };
-  }, [device]);
+  }, [device, connectToDevice]);
+
+  const deviceError = useMemo(() => {
+    if (deviceVersion && (deviceVersion !== EXPECTED_DEVICE_VERSION)) {
+      return `Unbekannte Geräteversion ${deviceVersion} (erwartet: ${EXPECTED_DEVICE_VERSION})`;
+    }
+
+    return undefined;
+  }, [deviceVersion]);
 
   return (
     <div className='bg-gray-800 '>
       <div className="mx-auto container flex flex-col min-h-screen">
-        <div onClick={onClick} className={classNames("connect-icon self-center transition hover:scale-110", deviceInfo.isConnected && "bg-green-600")} />
+        <div onClick={onClick} className={classNames("connect-icon self-center transition hover:scale-110", deviceError && "bg-red-600", !deviceError && deviceInfo.isConnected && "bg-green-600")} />
+        {deviceError && <div className="text-red-600 font-bold text-center my-5">{deviceError}</div>}
         <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div>
         <Divider className="my-5" />
         {device && <div className="hidden">
@@ -174,7 +181,7 @@ function App() {
         </div>}
 
 
-        {device && deviceInfo.isConnected && <div>
+        {device && deviceInfo.isConnected && !deviceError && <div>
           <GameBar deviceInfo={deviceInfo} handleError={handleError} />
 
           <DeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />

@@ -94,7 +94,7 @@ export function PeerInfo(props: PeerInfoProps) {
                 console.log("result ", result);
             })
             .catch(handleError),
-        [deviceInfo, peer]);
+        [deviceInfo, peer, handleError]);
 
     const buzz = useCallback(() => sendCommand([0x30]), [sendCommand]);
     const [active, _setActive] = useState(peer.node_info.current_state != 1);
@@ -105,7 +105,7 @@ export function PeerInfo(props: PeerInfoProps) {
         "setColor": () => setTimeout(() => setShowColorPicker(true), 100),
         "reset": () => sendCommand([0x40]),
         "shutdown": () => sendCommand([0x50])
-    }), []);
+    }), [sendCommand]);
 
     return <>
         <Card className={classNames("transition",
@@ -201,17 +201,7 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
         };
     }, [fetchValue]);
 
-    const sendVendor = useCallback(() => {
-        console.log("aaa");
-        device
-            .transferOut(deviceInfo.endpointOut.endpointNumber, new Uint8Array([1, 2, 3, 4]))
-            .then(_ => device.transferIn(deviceInfo.endpointIn.endpointNumber, 2))
-            .then(result => console.log(result))
-            .catch(handleError);
-    }, []);
-
     return <div className="mt-5 flex gap-5">
-        <Button onPress={() => sendVendor()}>Send Test</Button>
         {peers.map((peer, i) => <PeerInfo key={i} deviceInfo={deviceInfo} peer={peer} handleError={handleError} />)}
         {peers.length == 0 && <Card><CardBody><Spinner size="sm" color="white" label="Searching..." /></CardBody></Card>}
     </div>;

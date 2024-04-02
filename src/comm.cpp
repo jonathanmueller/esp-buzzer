@@ -29,7 +29,7 @@
 
 static QueueHandle_t s_comm_queue;
 
-static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 uint16_t pingInterval = DEFAULT_PING_INTERVAL;
 
@@ -343,6 +343,21 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
                 return false;
             }
             break;
+        case COMMAND_SET_GAME_CONFIG:
+            {
+                game_config_t *game_config = &command->args.game_config;
+                uint16_t crc               = esp_rom_crc16_be(0, (const uint8_t *)game_config, (const uint8_t *)&game_config->crc - (const uint8_t *)game_config);
+                if (crc != game_config->crc) {
+                    log_e("Received invalid game config (%lu), (CRC mismatch %2x vs %2x). Ignoring", (const uint8_t *)&game_config->crc - (const uint8_t *)game_config, crc, game_config->crc);
+                    return false;
+                } else {
+                    log_d("Received game config update.");
+                    nvm_data.game_config = *game_config;
+                    nvm_save();
+                    return true;
+                }
+            }
+            break;
         case COMMAND_BUZZ:
             buzz();
             return true;
@@ -448,9 +463,11 @@ static void comm_task(void *pvParameter) {
                                         if (buzzer_disabled_until < time + node_info->buzzer_active_remaining_ms) {
                                             time_of_last_keep_alive_communication = time; // This is a notable event -> reset shutdown timer
 
-                                            buzzer_disabled_until = time + node_info->buzzer_active_remaining_ms;
-                                            current_state         = STATE_DISABLED;
-                                            log_d("Received buzz from other node. Disabling for %dms", node_info->buzzer_active_remaining_ms);
+                                            if (!nvm_data.game_config.can_buzz_while_other_is_active) {
+                                                buzzer_disabled_until = time + node_info->buzzer_active_remaining_ms;
+                                                current_state         = STATE_DISABLED;
+                                                log_d("Received buzz from other node. Disabling for %dms", node_info->buzzer_active_remaining_ms);
+                                            }
                                         }
                                     }
 

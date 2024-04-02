@@ -23,9 +23,8 @@ void led_task(void *param);
 void led_setup() {
     pinMode(LED_PIN, OUTPUT);
     FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.setMaxPowerInVoltsAndMilliamps(3.7, MAX_CURRENT);
     FastLED.setBrightness(255);
-
-    fill_solid(leds, NUM_LEDS, 0);
 
     buzzer_color     = nvm_data.color;
     buzzer_color_rgb = CRGB(nvm_data.rgb[0], nvm_data.rgb[1], nvm_data.rgb[2]);
@@ -33,7 +32,21 @@ void led_setup() {
         buzzer_color = COLOR_ORANGE;
     }
 
+    fill_solid(leds, NUM_LEDS, 0);
+
     xTaskCreate(&led_task, "led_loop", 2000, NULL, 1, NULL);
+}
+
+void fadeTo(CRGB &rgb, const CRGB &other, uint8_t delta) {
+    if (rgb.r != other.r) {
+        rgb.r += min(max((int16_t)(other.r - rgb.r), (int16_t)(-(int16_t)delta)), (int16_t)delta);
+    }
+    if (rgb.g != other.g) {
+        rgb.g += min(max((int16_t)(other.g - rgb.g), (int16_t)(-(int16_t)delta)), (int16_t)delta);
+    }
+    if (rgb.b != other.b) {
+        rgb.b += min(max((int16_t)(other.b - rgb.b), (int16_t)(-(int16_t)delta)), (int16_t)delta);
+    }
 }
 
 static uint16_t hue                          = 0;
@@ -68,7 +81,17 @@ void led_task(void *param) {
 
             switch (current_state) {
                 case STATE_IDLE:
-                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
+                    {
+                        // fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
+                        CRGB target = baseColor.nscale8_video(20);
+                        for (uint8_t i = 0; i < NUM_LEDS; i++) {
+                            if (leds[i] == 0) {
+                                leds[i] = target;
+                            } else {
+                                fadeTo(leds[i], target, 1);
+                            }
+                        }
+                    }
                     break;
                 case STATE_CONFIG:
                     fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(buzzer_color == COLOR_RGB && digitalRead(BUZZER_BUTTON_PIN) == LOW ? 255 : sin8(millis() / 2) / 6 + 40));
@@ -82,7 +105,7 @@ void led_task(void *param) {
                     }
                     break;
                 case STATE_DISABLED:
-                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(1));
+                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(5));
                     break;
                 case STATE_BUZZER_ACTIVE:
                     for (uint8_t i = 0; i < NUM_LEDS; i++) {
@@ -90,7 +113,12 @@ void led_task(void *param) {
                         leds[i].nscale8_video(sin8(angle + 2 * i * 255.0f / NUM_LEDS));
                     }
 
-                    if (time_since_state_change < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
+                    if (
+                        (nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ||
+                         nvm_data.game_config.buzz_effect == EFFECT_FLASH_WHITE) &&
+                        time_since_state_change < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
+                        CRGB flashColor = nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ? baseColor : CRGB::White;
+
                         fract8 fract;
                         if (time_since_state_change < (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
                             fract = 255 - (uint8_t)(255.0f * (time_since_state_change) / FLASH_EFFECT_PRE_FLASH_DURATION);
@@ -98,7 +126,7 @@ void led_task(void *param) {
                             fract = 255 - (255.0f * (time_since_state_change - (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) / FLASH_EFFECT_DURATION);
                         }
                         for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                            leds[i] = leds[i].lerp8(FLASH_EFFECT_COLOR, fract);
+                            leds[i] = leds[i].lerp8(flashColor, fract);
                         }
                     }
                     break;

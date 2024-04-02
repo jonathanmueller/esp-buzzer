@@ -1,28 +1,20 @@
 import { Slider } from "@nextui-org/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DeviceInfo, uint16_t } from "./util";
 
 
-// const NodeInfo = new Struct('MyStructure') // give a name to the constructor
-//   .Int8('foo')        // signed 8-bit integer field `foo`
-//   .UInt16LE('bar')    // unsigned, little-endian 16-bit integer field `bar`
-//   .compile();         // create a constructor for the structure, called last
 
-type DeviceActionProps = {
-    description?: string,
-    endText?: string,
+type PingIntervalSliderProps = {
     deviceInfo: DeviceInfo,
     handleError: (e: any) => void;
 };
 
-function DeviceAction(props: DeviceActionProps) {
-    const { description, deviceInfo: { device }, handleError, endText } = props;
-    const [response, setResponse] = useState();
+function PingIntervalSlider(props: PingIntervalSliderProps) {
+    const { deviceInfo: { device }, handleError } = props;
     const [currentValue, setCurrentValue] = useState(0);
 
 
-    const fetchValue = async () => {
-        console.log("fetching ping");
+    const fetchValue = useCallback(async () => {
         await device.controlTransferIn({
             requestType: "vendor",
             recipient: "device",
@@ -31,13 +23,12 @@ function DeviceAction(props: DeviceActionProps) {
             index: 0
         }, 2)
             .then(result => {
-                console.log("ping response", result);
                 if (result.data) {
                     setCurrentValue(result.data.getUint16(0, true));
                 }
             })
-            .catch(props.handleError);
-    };
+            .catch(handleError);
+    }, [device, handleError]);
 
     const updateValue = async (value: number) => {
         await device.controlTransferOut({
@@ -57,7 +48,7 @@ function DeviceAction(props: DeviceActionProps) {
     useEffect(() => {
         fetchValue();
         return () => { };
-    }, []);
+    }, [fetchValue]);
 
     return <>
         {/* <Input
@@ -86,8 +77,8 @@ function DeviceAction(props: DeviceActionProps) {
             onChange={value => setCurrentValue(value as number)}
             onChangeEnd={value => updateValue(value as number)}
 
-            label={description}
+            label="Ping Interval"
         />
     </>;
 }
-export default DeviceAction;
+export default PingIntervalSlider;

@@ -1,5 +1,7 @@
-import Struct, { ExtractType } from "typed-struct";
+import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+
+export const EXPECTED_DEVICE_VERSION = 0x10;
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -35,6 +37,22 @@ export const peer_data_t = new Struct('peer_data_t')
     .Struct('node_info', node_info_t)
     .compile();
 export type peer_data_t = ExtractType<typeof peer_data_t>;
+
+export enum led_effect_t {
+    EFFECT_NONE,            // Only increase brightness
+    EFFECT_FLASH_WHITE,     // Flash with a bright white light
+    EFFECT_FLASH_BASE_COLOR // Flash with the buzzer's base color
+};
+
+export const game_config_t = new Struct('game_config_t')
+    .UInt16LE('buzzer_active_time')                 // [ms] Duration the buzzer is kept active (0: singular event, 65535: never reset)
+    .UInt16LE('deactivation_time_after_buzzing')    // [ms] Duration the buzzer is deactivated after buzzer_active_time has passed (0: can press again immediately, 65535: keep disabled forever)
+    .UInt8('buzz_effect', typed<led_effect_t>())    // The effect to play when pressing the buzzer
+    .Boolean8('can_buzz_while_other_is_active')     // Whether or not we can buzz while another buzzer is active
+    .Boolean8('must_release_before_pressing')       // Whether or not we have to release the buzzer before pressing to register
+    .UInt16LE('crc')                                // CRC-16/GENIBUS of the game config (using esp_rom_crc16_be over all previous bytes)
+    .compile();
+export type game_config_t = ExtractType<typeof game_config_t>;
 
 
 export const arr_peer_data_t = new Struct('arr_peer_data_t')

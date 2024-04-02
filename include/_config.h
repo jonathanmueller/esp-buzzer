@@ -30,10 +30,10 @@
 #define DEFAULT_PING_INTERVAL            10000     // Ping interval
 
 // Led
-#define NUM_LEDS                         14
+#define NUM_LEDS                         50
+#define MAX_CURRENT                      1500 // mA
 
 #define SHUTDOWN_ANIMATION_DURATION      1000
-#define FLASH_EFFECT_COLOR               CRGB::White // CRGB::White // baseColor
 #define FLASH_EFFECT_PRE_FLASH_COUNT     4
 #define FLASH_EFFECT_PRE_FLASH_DURATION  100
 #define FLASH_EFFECT_DURATION            600
