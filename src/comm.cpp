@@ -29,6 +29,7 @@
 
 static QueueHandle_t s_comm_queue;
 
+uint8_t comm_task_started                 = false;
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 uint16_t pingInterval = DEFAULT_PING_INTERVAL;
@@ -254,6 +255,8 @@ void send_ping(const uint8_t *mac_addr) {
 }
 
 void cleanup_peer_list() {
+    if (!comm_task_started) { return; }
+
     unsigned long time = millis();
     {
         bool head = true;
@@ -395,6 +398,8 @@ static void comm_task(void *pvParameter) {
     s_my_broadcast_info.type = ESP_DATA_TYPE_JOIN_ANNOUNCEMENT;
     send_state_update();
     s_my_broadcast_info.type = ESP_DATA_TYPE_STATE_UPDATE;
+
+    comm_task_started = true;
 
     while (true) {
         newQueueEntry      = xQueueReceive(s_comm_queue, &evt, 500 / portTICK_RATE_MS);

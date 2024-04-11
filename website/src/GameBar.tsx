@@ -35,7 +35,8 @@ function GameBar(props: GameBarProps) {
         [deviceInfo, handleError]);
 
 
-    return <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
+    return <>
+        <Divider orientation="vertical" className="h-12" />
         <PingIntervalSlider deviceInfo={deviceInfo} handleError={handleError} />
         <Divider orientation="vertical" className="h-12" />
         {/* <span className="grow" /> */}
@@ -49,7 +50,7 @@ function GameBar(props: GameBarProps) {
         <Divider orientation="vertical" />
         <span className="grow" />
         <Button color="danger" variant="shadow" startContent={<Power />} onPress={() => sendCommandToAll([0x50])}>Alle ausschalten</Button>
-    </div >;
+    </>;
 
 }
 export const ChevronDownIcon = () => (

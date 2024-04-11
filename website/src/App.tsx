@@ -1,7 +1,8 @@
-import { Divider } from '@nextui-org/react';
+import { Button } from '@nextui-org/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
+import DeviceLogViewer from './DeviceLogViewer';
 import DeviceNetworkInfo from './DeviceNetworkInfo';
 import GameBar from './GameBar';
 import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
@@ -114,11 +115,18 @@ function App() {
         await device.open();
       }
 
+      if (!device.configuration) {
+        await device.selectConfiguration(device.configurations[0].configurationValue);
+      }
+
       const deviceInfo = getDeviceInfo(device);
 
       // await device.selectConfiguration(1);
       console.log("Claiming interface ", deviceInfo.vendorInterface?.interfaceNumber, deviceInfo);
       await device.claimInterface(deviceInfo.vendorInterface?.interfaceNumber ?? 0);
+
+      console.log("Claiming interface 1");
+      await device.claimInterface(1);
 
 
       const versionInfo = await device.controlTransferIn({
@@ -160,11 +168,19 @@ function App() {
 
   return (
     <div className='bg-gray-800 '>
-      <div className="mx-auto container flex flex-col min-h-screen">
-        <div onClick={onClick} className={classNames("connect-icon self-center transition hover:scale-110", deviceError && "bg-red-600", !deviceError && deviceInfo.isConnected && "bg-green-600")} />
+      <div className="mx-auto pt-10 container flex flex-col min-h-screen">
+
+        <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
+          <div onClick={onClick} className={classNames("connect-icon h-[5rem] my-[-0.5rem] self-center transition hover:scale-110", deviceError && "bg-red-600", !deviceError && deviceInfo.isConnected && "bg-green-600")} />
+
+          {device && deviceInfo.isConnected && !deviceError && <>
+            <GameBar deviceInfo={deviceInfo} handleError={handleError} />
+          </>}
+        </div>
         {deviceError && <div className="text-red-600 font-bold text-center my-5">{deviceError}</div>}
-        <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div>
-        <Divider className="my-5" />
+        {/* <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div> */}
+
+        {/* <Divider className="my-5" /> */}
         {device && <div className="hidden">
           {device.configurations.map((config, i, configs) => <React.Fragment key={i}>
             {configs.length > 1 && <h1>{config.configurationName ?? "Configuration"} ({config.configurationValue})</h1>}
@@ -181,11 +197,15 @@ function App() {
         </div>}
 
 
-        {device && deviceInfo.isConnected && !deviceError && <div>
-          <GameBar deviceInfo={deviceInfo} handleError={handleError} />
+        {device && deviceInfo.isConnected && !deviceError && <div className="grid grid-cols-12 gap-3 flex-1">
+          <div className="flex-1 col-span-8">
+            <DeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
+          </div>
 
-          <DeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
-
+          <div className="col-span-4 overflow-x-auto h-full">
+            <Button onPress={() => device.transferOut(deviceInfo.endpointOut.endpointNumber, new Uint8Array([0xCA, 0xFE])).then(console.log)}>Send Data</Button>
+            <DeviceLogViewer deviceInfo={deviceInfo} handleError={handleError} />
+          </div>
         </div>}
       </div>
     </div>

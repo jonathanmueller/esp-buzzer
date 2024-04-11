@@ -203,7 +203,7 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
 
     return <div className="mt-5 flex gap-5">
         {peers.map((peer, i) => <PeerInfo key={i} deviceInfo={deviceInfo} peer={peer} handleError={handleError} />)}
-        {peers.length == 0 && <Card><CardBody><Spinner size="sm" color="white" label="Searching..." /></CardBody></Card>}
+        {peers.length == 0 && <Card className="p-5"><CardBody><Spinner size="lg" color="white" label="Suche..." /></CardBody></Card>}
     </div>;
 }
 

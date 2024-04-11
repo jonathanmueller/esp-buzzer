@@ -47,6 +47,7 @@ enum {
     STRID_SERIAL,
     STRID_CDC,
     STRID_VENDOR,
+    STRID_KEYBOARD,
 };
 
 // array of pointer to string descriptors
@@ -56,7 +57,8 @@ char const *string_desc_arr[] = {
     "Buzzer Controller",          // 2: Product
     NULL,                         // 3: Serials will use unique ID if possible
     "BuzzerController CDC",       // 4: CDC Interface
-    "BuzzerController WebUSB"     // 5: Vendor Interface
+    "BuzzerController WebUSB",    // 5: Vendor Interface
+    "BuzzerController Keyboard"   // 6: Keyboard Interface
 };
 
 /* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
@@ -108,10 +110,11 @@ enum {
     ITF_NUM_CDC = 0,
     ITF_NUM_CDC_DATA,
     ITF_NUM_VENDOR,
+    ITF_NUM_KEYBOARD,
     ITF_NUM_TOTAL
 };
 
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_VENDOR_DESC_LEN)
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_VENDOR_DESC_LEN + TUD_HID_INOUT_DESC_LEN)
 
 #if CFG_TUSB_MCU == OPT_MCU_LPC175X_6X || CFG_TUSB_MCU == OPT_MCU_LPC177X_8X || CFG_TUSB_MCU == OPT_MCU_LPC40XX
 // LPC 17xx and 40xx endpoint type (bulk/interrupt/iso) are fixed by its number
@@ -135,21 +138,65 @@ enum {
 #define EPNUM_VENDOR_IN  4
 #define EPNUM_VENDOR_OUT 5
 #else
-#define EPNUM_CDC_IN     2
-#define EPNUM_CDC_OUT    2
-#define EPNUM_VENDOR_IN  3
-#define EPNUM_VENDOR_OUT 3
+#define EPNUM_CDC_IN       1
+#define EPNUM_CDC_OUT      1
+#define EPNUM_CDC_NOTIF    2
+#define EPNUM_VENDOR_IN    3
+#define EPNUM_VENDOR_OUT   3
+#define EPNUM_KEYBOARD_IN  4
+#define EPNUM_KEYBOARD_OUT 4
 #endif
+
+// #define KEYBOARD_DESCRIPTOR_SIZE (sizeof({ TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(HID_REPORT_ID_KEYBOARD)) }))
+
+#define KEYBOARD_DESCRIPTOR_SIZE 67
+
+// clang-format off
+#define TUD_CUSTOM_CDC_DESCRIPTOR(_itfnum, _stridx, _ep_notif, _ep_notif_size, _epout, _epin, _epsize) \
+  /* Interface Associate */\
+  8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 2, TUSB_CLASS_CDC, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL, CDC_COMM_PROTOCOL_NONE, 0,\
+  /* CDC Control Interface */\
+  9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_CDC, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL, CDC_COMM_PROTOCOL_NONE, _stridx,\
+  /* CDC Header */\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_HEADER, U16_TO_U8S_LE(0x0120),\
+  /* CDC Call */\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_CALL_MANAGEMENT, 0, (uint8_t)((_itfnum) + 1),\
+  /* CDC ACM: support line request */\
+  4, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_ABSTRACT_CONTROL_MANAGEMENT, 2,\
+  /* CDC Union */\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_UNION, _itfnum, (uint8_t)((_itfnum) + 1),\
+  /* Endpoint Notification */\
+  7, TUSB_DESC_ENDPOINT, _ep_notif, TUSB_XFER_INTERRUPT, U16_TO_U8S_LE(_ep_notif_size), 16,\
+  /* CDC Data Interface */\
+  9, TUSB_DESC_INTERFACE, (uint8_t)((_itfnum)+1), 0, 2, TUSB_CLASS_CDC_DATA, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL, CDC_COMM_PROTOCOL_NONE, 0,\
+  /* Endpoint Out */\
+  7, TUSB_DESC_ENDPOINT, _epout, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 1,\
+  /* Endpoint In */\
+  7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 1
+
+
+// Interface number, string index, EP Out & IN address, EP size
+#define TUD_VENDOR_INTERRUPT_DESCRIPTOR(_itfnum, _stridx, _epout, _epin, _epsize) \
+  /* Interface */\
+  9, TUSB_DESC_INTERFACE, _itfnum, 0, 2, TUSB_CLASS_VENDOR_SPECIFIC, 0x00, 0x00, _stridx,\
+  /* Endpoint Out */\
+  7, TUSB_DESC_ENDPOINT, _epout, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 1,\
+  /* Endpoint In */\
+  7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 1
+// clang-format on
 
 uint8_t const desc_configuration[] = {
     // Config number, interface count, string index, total length, attribute, power in mA
-    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
+    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 500),
 
     // Interface number, string index, EP notification address and size, EP data address (out, in) and size.
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, STRID_CDC, 0x81, 8, EPNUM_CDC_OUT, 0x80 | EPNUM_CDC_IN, TUD_OPT_HIGH_SPEED ? 512 : 64),
+    TUD_CUSTOM_CDC_DESCRIPTOR(ITF_NUM_CDC, STRID_CDC, 0x80 | EPNUM_CDC_NOTIF, 64, EPNUM_CDC_OUT, 0x80 | EPNUM_CDC_IN, TUD_OPT_HIGH_SPEED ? 512 : 64),
 
     // Interface number, string index, EP Out & IN address, EP size
-    TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, STRID_VENDOR, EPNUM_VENDOR_OUT, 0x80 | EPNUM_VENDOR_IN, TUD_OPT_HIGH_SPEED ? 512 : 64)
+    TUD_VENDOR_INTERRUPT_DESCRIPTOR(ITF_NUM_VENDOR, STRID_VENDOR, EPNUM_VENDOR_OUT, 0x80 | EPNUM_VENDOR_IN, TUD_OPT_HIGH_SPEED ? 512 : 64),
+
+    TUD_HID_INOUT_DESCRIPTOR(ITF_NUM_KEYBOARD, STRID_KEYBOARD, HID_ITF_PROTOCOL_NONE, KEYBOARD_DESCRIPTOR_SIZE, EPNUM_KEYBOARD_OUT, (uint8_t)(0x80 | EPNUM_KEYBOARD_IN), 64, 1)
+
 };
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR

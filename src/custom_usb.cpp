@@ -3,8 +3,6 @@
 #ifdef CONFIG_TINYUSB_ENABLED
 
 #include "Arduino.h"
-#include "USB.h"
-#include "USBVendor.h"
 #include "comm.h"
 #include "tusb.h"
 #include "esp32-hal-tinyusb.h"
@@ -21,6 +19,7 @@
 
 USBCDC usb_cdc;
 USBVendor Vendor;
+USBHIDKeyboard Keyboard;
 
 /* Hack to get to private member itf */
 struct _USBVendor : public Stream {
@@ -44,6 +43,13 @@ static request_line_coding_t vendor_line_coding = { 9600, 0, 0, 8 };
 
 // Bit 0:  DTR (Data Terminal Ready), Bit 1: RTS (Request to Send)
 static uint8_t vendor_line_state = 0;
+#include "esp32-hal-uart.h"
+#include "soc/uart_struct.h"
+#include "hal/uart_ll.h"
+
+static void ARDUINO_ISR_ATTR cdc_write(char c) {
+    tud_cdc_n_write_char(0, c);
+}
 
 // USB and Vendor events
 static void usbEventCallback(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
@@ -51,9 +57,11 @@ static void usbEventCallback(void *arg, esp_event_base_t event_base, int32_t eve
     switch (event_id) {
         case ARDUINO_USB_STARTED_EVENT:
             log_d("ARDUINO_USB_STARTED_EVENT");
+            ets_install_putc2((void (*)(char)) & cdc_write);
             break;
         case ARDUINO_USB_STOPPED_EVENT:
             log_d("ARDUINO_USB_STOPPED_EVENT");
+            ets_install_putc2(NULL);
             break;
         case ARDUINO_USB_SUSPEND_EVENT:
             log_d("USB SUSPENDED: remote_wakeup_en: %u\n", data->suspend.remote_wakeup_en);
@@ -79,33 +87,16 @@ static void usbCdcLineStateEvent(void *arg, esp_event_base_t event_base, int32_t
     bool dtr = data->line_state.dtr;
     bool rts = data->line_state.rts;
 
-    if (!dtr && rts) {
-        if (lineState == CDC_LINE_IDLE) {
-            lineState++;
-        } else {
-            lineState = CDC_LINE_IDLE;
-        }
-    } else if (dtr && rts) {
-        if (lineState == CDC_LINE_1) {
-            lineState++;
-        } else {
-            lineState = CDC_LINE_IDLE;
-        }
-    } else if (dtr && !rts) {
-        if (lineState == CDC_LINE_2) {
-            lineState++;
-        } else {
-            lineState = CDC_LINE_IDLE;
-        }
-    } else if (!dtr && !rts) {
-        if (lineState == CDC_LINE_3) {
-            // log_i("Rebooting...");
-            // esp_restart();
-        } else {
-            lineState = CDC_LINE_IDLE;
-        }
+    if (lineState == CDC_LINE_IDLE && dtr && rts) {
+        lineState++;
+    } else if (lineState == CDC_LINE_1 && dtr && !rts) {
+        // log_i("Rebooting...");
+        // esp_restart();
+        // usb_cdc.enableReboot();
+    } else {
+        lineState = CDC_LINE_IDLE;
     }
-    log_d("line state event: dtr=%d, rts=%d, line state=%d", dtr, rts, lineState);
+    // log_d("line state event: dtr=%d, rts=%d, line state=%d", dtr, rts, lineState);
 }
 
 static void usbCdcLineCodingEvent(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
@@ -117,7 +108,7 @@ static void usbCdcLineCodingEvent(void *arg, esp_event_base_t event_base, int32_
 
 static void usbCdcRxData(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     arduino_usb_cdc_event_data_t *data = (arduino_usb_cdc_event_data_t *)event_data;
-    log_d("USB CDC RX %d bytes", data->rx.len);
+    log_d("USB CDC RX %d bytes:", data->rx.len);
     while (usb_cdc.available()) {
         usb_cdc.read();
     }
@@ -341,13 +332,14 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
 }
 
 void usb_setup_task(void *arg) {
-    delay(4000);
+    // delay(4000);
 
     esp_reset_reason_t reason = esp_reset_reason();
     if (reason == ESP_RST_PANIC) {
-        log_e("Disabling WebUSB");
-        vTaskDelete(NULL);
-        return;
+        // log_e("Delaying USB initialization...");
+        // delay(5000);
+        // vTaskDelete(NULL);
+        // return;
     }
 
     log_i("Setting up USB. Switching log output...");
@@ -365,14 +357,22 @@ void usb_setup_task(void *arg) {
     usb_cdc.begin();
     Vendor.begin();
     USB.begin();
+    Keyboard.begin();
 
     // usb_cdc.setDebugOutput(true);
 
-    vTaskDelete(NULL);
+    // while (true) {
+    //     usb_cdc.print(".");
+    //     Vendor.print(",");
+    //     delay(1000);
+    // }
+
+    // vTaskDelete(NULL);
 }
 
 void usb_setup() {
-    xTaskCreate(usb_setup_task, "usb_setup", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+    usb_setup_task(NULL);
+    // xTaskCreate(usb_setup_task, "usb_setup", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
 }
 
 #endif

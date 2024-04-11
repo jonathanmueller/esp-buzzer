@@ -1,5 +1,4 @@
 .connect-icon {
-  height: 10rem;
   mask: url('./assets/buzzer.png') center center no-repeat;
   mask-size: contain;
   background-color: white;
