@@ -12,9 +12,9 @@ unsigned long buzzer_disabled_until     = 0;
 unsigned long back_button_pressed_since = 0;
 uint16_t both_buttons_pressed_for       = 0;
 
-bool lastPushedBootButton   = false; /* Whether or not the boot button was pushed last loop iteration */
-bool lastPushedBuzzerButton = false; /* Whether or not the buzzer button was pushed last loop iteration */
-uint8_t startup_pins        = 0;
+bool lastPushedBackButton       = false; /* Whether or not the back button was pushed last loop iteration */
+bool lastPushedBuzzerButton     = false; /* Whether or not the buzzer button was pushed last loop iteration */
+bool pressedBackButtonSinceBoot = false;
 
 void set_state(node_state_t state) {
     current_state     = state;
@@ -22,13 +22,13 @@ void set_state(node_state_t state) {
 }
 
 void button_setup() {
-    pinMode(BOOT_BUTTON_PIN, INPUT);
+    // pinMode(BOOT_BUTTON_PIN, INPUT);
     pinMode(BACK_BUTTON_PIN, INPUT_PULLUP);
     pinMode(BUZZER_BUTTON_PIN, INPUT_PULLUP);
 
-    startup_pins |= (digitalRead(BUZZER_BUTTON_PIN) == LOW) << 0;
-    startup_pins |= (digitalRead(BACK_BUTTON_PIN) == LOW) << 1;
-    startup_pins |= (digitalRead(BOOT_BUTTON_PIN) == LOW) << 2;
+    // pinsBuzzerButtonSinceBoot |= (digitalRead(BUZZER_BUTTON_PIN) == LOW);
+    // pressedBootButtonSinceBoot |= (digitalRead(BOOT_BUTTON_PIN) == LOW);
+    pressedBackButtonSinceBoot = (digitalRead(BACK_BUTTON_PIN) == LOW);
 
     // if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
     //     lastPushedBuzzerButton = true;
@@ -103,11 +103,11 @@ void button_loop() {
 
     static CEveryNMillis debounceBackButtonRelease(50);
     if (digitalRead(BACK_BUTTON_PIN) == LOW) {
-        if (!lastPushedBootButton) {
+        if (!lastPushedBackButton) {
             back_button_pressed_since = time;
             send_state_update();
         }
-        lastPushedBootButton = true;
+        lastPushedBackButton = true;
         debounceBackButtonRelease.reset();
 
         if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
@@ -115,7 +115,6 @@ void button_loop() {
 
             if (both_buttons_pressed_for > 2000) {
                 config_loop();
-                set_state(STATE_SHOW_BATTERY);
             }
 
             time                      = millis();
@@ -131,8 +130,12 @@ void button_loop() {
         }
     } else {
         if (debounceBackButtonRelease) {
-            both_buttons_pressed_for = 0;
-            lastPushedBootButton     = false;
+            if (!pressedBackButtonSinceBoot && lastPushedBackButton && (time - back_button_pressed_since) < 1000) {
+                set_state(STATE_SHOW_BATTERY);
+            }
+            both_buttons_pressed_for   = 0;
+            lastPushedBackButton       = false;
+            pressedBackButtonSinceBoot = false;
         }
     }
 

@@ -22,6 +22,16 @@ void led_task(void *param);
 
 void led_setup() {
     pinMode(LED_PIN, OUTPUT);
+    pinMode(LED_ENABLE_PIN, OUTPUT_OPEN_DRAIN);
+
+    // Connect MOSFET to power
+    digitalWrite(LED_ENABLE_PIN, LOW);
+
+    gpio_deep_sleep_hold_en();
+    if (ESP_OK != gpio_hold_en((gpio_num_t)LED_ENABLE_PIN)) {
+        log_e("Could not enable deep sleep hold mode for LED enable pin");
+    }
+
     FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
     FastLED.setMaxPowerInVoltsAndMilliamps(3.7, MAX_CURRENT);
     FastLED.setBrightness(255);
@@ -84,13 +94,7 @@ void led_task(void *param) {
                     {
                         // fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
                         CRGB target = baseColor.nscale8_video(20);
-                        for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                            if (leds[i] == 0) {
-                                leds[i] = target;
-                            } else {
-                                fadeTo(leds[i], target, 1);
-                            }
-                        }
+                        fill_solid(leds, NUM_LEDS, target);
                     }
                     break;
                 case STATE_CONFIG:
@@ -99,18 +103,21 @@ void led_task(void *param) {
                 case STATE_SHUTDOWN:
                     {
                         fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
-                        uint8_t leds_to_shutoff = ((float)time_since_state_change / 2 / SHUTDOWN_ANIMATION_DURATION) * NUM_LEDS;
-                        fill_solid(leds, leds_to_shutoff, 0);
-                        fill_solid(&leds[NUM_LEDS - leds_to_shutoff], leds_to_shutoff, 0);
+                        uint8_t leds_to_shutoff = ((float)time_since_state_change / SHUTDOWN_ANIMATION_DURATION) * NUM_LEDS;
+                        fill_solid(&leds[(NUM_LEDS - leds_to_shutoff) / 2], leds_to_shutoff, 0);
                     }
                     break;
                 case STATE_DISABLED:
                     fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(5));
                     break;
                 case STATE_BUZZER_ACTIVE:
+                    uint8_t scale;
                     for (uint8_t i = 0; i < NUM_LEDS; i++) {
                         leds[i] = baseColor;
-                        leds[i].nscale8_video(sin8(angle + 2 * i * 255.0f / NUM_LEDS));
+                        scale   = sin8((int16_t)(((int16_t)(ACTIVE_EFFECT_SPEED * angle) - ACTIVE_EFFECT_NUM_WAVES * (abs((int16_t)i - (NUM_LEDS / 2))) * 255.0f / NUM_LEDS)));
+                        scale   = scale < 50 ? 0 : (scale - 50) * (255.0 / (255.0 - 50));
+                        scale   = scale < 1 ? 1 : scale;
+                        leds[i].nscale8_video(scale);
                     }
 
                     if (

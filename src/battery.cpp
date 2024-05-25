@@ -60,7 +60,7 @@ void battery_setup() {
 }
 
 void battery_loop() {
-    EVERY_N_MILLIS(100) {
+    EVERY_N_MILLIS(500) {
         measure_battery_voltage();
 
         /* Check low battery state */
@@ -94,7 +94,10 @@ void shutdown(bool turnOffLEDs, bool allowWakeupWithBuzzer) {
     set_state(STATE_SHUTDOWN);
     delay(SHUTDOWN_ANIMATION_DURATION);
     if (turnOffLEDs) {
+        digitalWrite(LED_ENABLE_PIN, HIGH);
         FastLED.setBrightness(0);
+        FastLED.show();
+        delay(100);
     }
 
     while ((allowWakeupWithBuzzer && digitalRead(BUZZER_BUTTON_PIN) == LOW) || digitalRead(BACK_BUTTON_PIN) == LOW) {

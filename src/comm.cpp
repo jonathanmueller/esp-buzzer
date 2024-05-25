@@ -154,6 +154,7 @@ void send_state_update() {
         .version                    = VERSION_CODE,
         .node_type                  = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
         .battery_percent            = battery_percent_rounded,
+        .battery_voltage            = battery_voltage,
         .color                      = buzzer_color,
         .rgb                        = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
         .current_state              = current_state,
@@ -435,7 +436,7 @@ static void comm_task(void *pvParameter) {
                                     payload_node_info_t *node_info = &data->payload.node_info;
                                     log_v("Task Stack High Water Mark: %d", uxTaskGetStackHighWaterMark(NULL));
 
-                                    log_d("Received node state from " MACSTR ": type=%d, color=%d, currentState=%d, battery=%d%%", MAC2STR(recv_cb->mac_addr), node_info->node_type, node_info->color, node_info->current_state, node_info->battery_percent);
+                                    log_d("Received node state from " MACSTR ": type=%d, color=%d, currentState=%d, battery=%dmV (%d%%)", MAC2STR(recv_cb->mac_addr), node_info->node_type, node_info->color, node_info->current_state, node_info->battery_voltage, node_info->battery_percent);
 
                                     boolean notSeenBefore = false;
                                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
@@ -545,11 +546,12 @@ static void comm_task(void *pvParameter) {
             EVERY_N_SECONDS(ACCOUNCEMENT_INTERVAL_SECONDS) { send_state_update(); }
 
             if (!has_external_power) {
-                if (time - time_of_last_keep_alive_communication > (SHUTDOWN_TIME_NO_BUZZING_SECONDS * 1000)) {
+                /* Check for ">" in both of these time delta checks, otherwise an integer underflow will occur */
+                if ((time > time_of_last_keep_alive_communication) && (time - time_of_last_keep_alive_communication > (SHUTDOWN_TIME_NO_BUZZING_SECONDS * 1000))) {
                     log_i("Nobody pushing any buttons. Shutting down...");
                     FastLED.setBrightness(10);
                     shutdown(false, true);
-                } else if (time - time_of_last_seen_peer > (SHUTDOWN_TIME_NO_COMMS_SECONDS * 1000)) {
+                } else if ((time > time_of_last_seen_peer) && (time - time_of_last_seen_peer > (SHUTDOWN_TIME_NO_COMMS_SECONDS * 1000))) {
                     log_i("No other buzzer near me. Shutting down...");
                     FastLED.setBrightness(10);
                     shutdown(false, true);

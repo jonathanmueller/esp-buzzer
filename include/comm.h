@@ -65,6 +65,7 @@ typedef struct {
     uint8_t version; /* Must match CONFIG_VERSION */
     node_type_t node_type;
     uint8_t battery_percent;
+    uint32_t battery_voltage;
     color_t color;
     uint8_t rgb[3];
     node_state_t current_state;
