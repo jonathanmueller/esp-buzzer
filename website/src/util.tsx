@@ -1,7 +1,7 @@
 import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
 
-export const EXPECTED_DEVICE_VERSION = 0x10;
+export const EXPECTED_DEVICE_VERSION = 0x11;
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -20,6 +20,7 @@ export const node_info_t = new Struct('node_info_t')
     .UInt8('version')
     .UInt8('node_type')
     .UInt8('battery_percent')
+    .UInt32LE('battery_voltage')
     .UInt8('color')
     .UInt8Array('rgb', 3)
     .UInt8('current_state')
@@ -69,6 +70,8 @@ export function uint16_t(value: number) {
 
 export type DeviceInfo = {
     device: USBDevice,
+    cdcInterface: USBInterface,
+    serialPort?: SerialPort,
     vendorInterface: USBInterface,
     endpointIn: USBEndpoint,
     endpointOut: USBEndpoint,
@@ -103,6 +106,7 @@ export const USB_CODES = {
     }
 };
 
+export const INTERFACE_CLASS_CDC = 0x0A; // CDC-Data
 export const INTERFACE_CLASS_VENDOR = 0xFF; // Vendor
 
 export const COLORS = {

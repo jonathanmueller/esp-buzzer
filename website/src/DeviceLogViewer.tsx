@@ -14,6 +14,8 @@ function DeviceLogViewer(props: DeviceLogViewerProps) {
     useEffect(() => {
 
         const transferIn = async () => {
+            if (!deviceInfo.cdcInterface.claimed) { return; }
+
             await device
                 .transferIn(1, 512)
                 .then((result: USBInTransferResult) => {
@@ -36,7 +38,7 @@ function DeviceLogViewer(props: DeviceLogViewerProps) {
 
         transferIn();
 
-    }, [device, handleError]);
+    }, [device, deviceInfo.cdcInterface.claimed, handleError]);
 
     return <pre className="text-small">
         <Ansi>

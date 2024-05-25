@@ -1,18 +1,19 @@
-import { Button } from '@nextui-org/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
-import DeviceLogViewer from './DeviceLogViewer';
 import DeviceNetworkInfo from './DeviceNetworkInfo';
 import GameBar from './GameBar';
-import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
+import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_CDC, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
 
 
 function getDeviceInfo(device?: USBDevice): UnconnectedDeviceInfo | ConnectedDeviceInfo {
   const vendorInterface = device?.configuration?.interfaces.filter(itf => itf.alternate.interfaceClass === INTERFACE_CLASS_VENDOR)[0];
-  if (device && vendorInterface?.claimed) {
+  const cdcInterface = device?.configuration?.interfaces.filter(itf => itf.alternate.interfaceClass === INTERFACE_CLASS_CDC)[0];
+
+  if (device && vendorInterface && cdcInterface && vendorInterface?.claimed) {
     return {
       device,
+      cdcInterface,
       vendorInterface,
       isConnected: true,
       endpointIn: vendorInterface?.alternate.endpoints.filter(endpoint => endpoint.direction === "in")[0],
@@ -22,6 +23,7 @@ function getDeviceInfo(device?: USBDevice): UnconnectedDeviceInfo | ConnectedDev
 
   return {
     device,
+    cdcInterface,
     vendorInterface,
     isConnected: false,
     endpointIn: vendorInterface?.alternate.endpoints.filter(endpoint => endpoint.direction === "in")[0],
@@ -121,14 +123,33 @@ function App() {
 
       const deviceInfo = getDeviceInfo(device);
 
-      // await device.selectConfiguration(1);
-      console.log("Claiming interface ", deviceInfo.vendorInterface?.interfaceNumber, deviceInfo);
-      await device.claimInterface(deviceInfo.vendorInterface?.interfaceNumber ?? 0);
+      // if (deviceInfo.cdcInterface) {
+      //     // try {
+      //     console.log("Claiming interface", deviceInfo.cdcInterface.interfaceNumber);
+      //     await device.claimInterface(deviceInfo.cdcInterface.interfaceNumber)
+      //       .then(() => console.log("Claimed"))
+      //       .catch(() => console.log("Error"))
+      //       .finally(() => console.log("finally"));
+      //     // } catch (e) {
+      //     //   console.log("That didn't work. Trying WebSerial...");
+      //     //   if (deviceInfo.serialPort) {
+      //     //     await deviceInfo.serialPort.open({ baudRate: 112500 });
+      //     //     console.log("Connected to WebSerial", deviceInfo.serialPort);
+      //     //     console.log(await deviceInfo.serialPort.getSignals());
+      //     //   }
+      //     // }
+      // }
 
-      console.log("Claiming interface 1");
-      await device.claimInterface(1);
+
+      if (deviceInfo.vendorInterface) {
+        // await device.selectConfiguration(1);
+        console.log("Claiming interface", deviceInfo.vendorInterface.interfaceNumber, deviceInfo);
+        await device.claimInterface(deviceInfo.vendorInterface.interfaceNumber);
+      }
 
 
+
+      // if (deviceInfo.vendorInterface?.claimed) {
       const versionInfo = await device.controlTransferIn({
         requestType: "vendor",
         recipient: "device",
@@ -139,6 +160,9 @@ function App() {
 
       const version = versionInfo.data?.getUint8(0);
       setDeviceVersion(version);
+      // } else {
+      //   throw new Error("Konnte nicht verbinden");
+      // }
 
       setRefreshDevice({});
 
@@ -178,7 +202,7 @@ function App() {
           </>}
         </div>
         {deviceError && <div className="text-red-600 font-bold text-center my-5">{deviceError}</div>}
-        {/* <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div> */}
+        <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div>
 
         {/* <Divider className="my-5" /> */}
         {device && <div className="hidden">
@@ -198,14 +222,14 @@ function App() {
 
 
         {device && deviceInfo.isConnected && !deviceError && <div className="grid grid-cols-12 gap-3 flex-1">
-          <div className="flex-1 col-span-8">
+          <div className="flex-1 col-span-12">
             <DeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
           </div>
 
-          <div className="col-span-4 overflow-x-auto h-full">
+          {/* <div className="col-span-4 overflow-x-auto h-full">
             <Button onPress={() => device.transferOut(deviceInfo.endpointOut.endpointNumber, new Uint8Array([0xCA, 0xFE])).then(console.log)}>Send Data</Button>
             <DeviceLogViewer deviceInfo={deviceInfo} handleError={handleError} />
-          </div>
+          </div> */}
         </div>}
       </div>
     </div>

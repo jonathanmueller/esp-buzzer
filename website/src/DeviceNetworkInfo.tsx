@@ -125,7 +125,7 @@ export function PeerInfo(props: PeerInfoProps) {
                 </>}
                 {peer.valid_version && <Chip size="sm" variant='flat'>{peer.latency_us === 0 ? '\u2013 ' : `${(peer.latency_us / 1000).toFixed(1)}`}ms</Chip>}
                 <Tooltip showArrow content={peer.rssi === 0 ? '-' : `${peer.rssi}dBm`}>{getReceptionIcon(peer.rssi)}</Tooltip>
-                {peer.valid_version && <Tooltip showArrow content={peer.node_info.battery_percent === 0 ? '-' : `${peer.node_info.battery_percent}%`}>{getBatteryIcon(peer.node_info.battery_percent)}</Tooltip>}
+                {peer.valid_version && <Tooltip showArrow content={peer.node_info.battery_percent === 0 ? '-' : `${peer.node_info.battery_percent}% (${(peer.node_info.battery_voltage / 1000).toFixed(2)}V)`}>{getBatteryIcon(peer.node_info.battery_percent)}</Tooltip>}
             </CardHeader>
             <Divider />
 
