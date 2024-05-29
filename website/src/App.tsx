@@ -55,6 +55,10 @@ function App() {
   }, [setError]);
 
   useEffect(() => {
+    if (!navigator.usb) {
+      return;
+    }
+
     (async () => {
       let devices = await navigator.usb.getDevices();
       if (devices && devices.length) {
@@ -66,6 +70,10 @@ function App() {
 
 
   useEffect(() => {
+    if (!navigator.usb) {
+      return;
+    }
+
     const onConnect = (e: USBConnectionEvent) => {
       if (deviceRef.current === undefined) {
         setDevice(e.device);
@@ -189,6 +197,18 @@ function App() {
 
     return undefined;
   }, [deviceVersion]);
+
+
+  if (!navigator.usb) {
+    return <div className='bg-gray-800 '>
+      <div className="mx-auto pt-10 container flex flex-col min-h-screen">
+        <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
+          <div className={classNames("connect-icon h-[5rem] my-[-0.5rem] self-center", "bg-red-900")} />
+          <p className='mx-auto text-red-300 text-2xl font-extralight'>Dieser Browser wird leider nicht unterstützt.</p>
+        </div>
+      </div>
+    </div>;
+  }
 
   return (
     <div className='bg-gray-800 '>
