@@ -94,10 +94,16 @@ void shutdown(bool turnOffLEDs, bool allowWakeupWithBuzzer) {
     set_state(STATE_SHUTDOWN);
     delay(SHUTDOWN_ANIMATION_DURATION);
     if (turnOffLEDs) {
-        digitalWrite(LED_ENABLE_PIN, HIGH);
         FastLED.setBrightness(0);
         FastLED.show();
-        delay(100);
+
+        // Disable MOSFET
+        digitalWrite(LED_ENABLE_PIN, HIGH);
+        gpio_deep_sleep_hold_en();
+        if (ESP_OK != gpio_hold_en((gpio_num_t)LED_ENABLE_PIN)) {
+            log_e("Could not enable deep sleep hold mode for LED enable pin");
+        }
+        delay(200);
     }
 
     while ((allowWakeupWithBuzzer && digitalRead(BUZZER_BUTTON_PIN) == LOW) || digitalRead(BACK_BUTTON_PIN) == LOW) {

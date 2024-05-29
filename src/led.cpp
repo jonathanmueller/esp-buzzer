@@ -21,16 +21,14 @@ CRGB colors[] = {
 void led_task(void *param);
 
 void led_setup() {
+    gpio_deep_sleep_hold_dis();
+    gpio_hold_dis((gpio_num_t)LED_ENABLE_PIN);
+
     pinMode(LED_PIN, OUTPUT);
-    pinMode(LED_ENABLE_PIN, OUTPUT_OPEN_DRAIN);
+    pinMode(LED_ENABLE_PIN, OUTPUT);
 
     // Connect MOSFET to power
     digitalWrite(LED_ENABLE_PIN, LOW);
-
-    gpio_deep_sleep_hold_en();
-    if (ESP_OK != gpio_hold_en((gpio_num_t)LED_ENABLE_PIN)) {
-        log_e("Could not enable deep sleep hold mode for LED enable pin");
-    }
 
     FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
     FastLED.setMaxPowerInVoltsAndMilliamps(3.7, MAX_CURRENT);
@@ -69,7 +67,10 @@ void led_task(void *param) {
     CRGB baseColor;
     unsigned long time;
     while (true) {
-        time   = millis();
+        time = millis();
+
+        // digitalWrite(LED_ENABLE_PIN, (time % 4000) < 2000);
+
         angle += 1;
         hue   += 1;
 
