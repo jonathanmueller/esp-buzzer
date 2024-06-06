@@ -1,7 +1,7 @@
 import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
 
-export const EXPECTED_DEVICE_VERSION = 0x11;
+export const EXPECTED_DEVICE_VERSION = 0x12;
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -16,6 +16,28 @@ export enum node_state_t {
     STATE_CONFIG
 };
 
+export enum key_modifier_t {
+    LEFT_CTRL = (1 << 0),
+    LEFT_SHIFT = (1 << 1),
+    LEFT_ALT = (1 << 2),
+    LEFT_GUI = (1 << 3),
+    RIGHT_CTRL = (1 << 4),
+    RIGHT_SHIFT = (1 << 5),
+    RIGHT_ALT = (1 << 6),
+    RIGHT_GUI = (1 << 7),
+
+    ALL_CTRL = LEFT_CTRL | RIGHT_CTRL,
+    ALL_SHIFT = LEFT_SHIFT | RIGHT_SHIFT,
+    ALL_ALT = LEFT_ALT | RIGHT_ALT,
+    ALL_GUI = LEFT_GUI | RIGHT_GUI
+};
+
+export const key_config_t = new Struct('key_config_t')
+    .UInt8('modifiers')
+    .UInt8('scan_code')
+    .compile();
+export type key_config_t = ExtractType<typeof key_config_t>;
+
 export const node_info_t = new Struct('node_info_t')
     .UInt8('version')
     .UInt8('node_type')
@@ -23,6 +45,7 @@ export const node_info_t = new Struct('node_info_t')
     .UInt32LE('battery_voltage')
     .UInt8('color')
     .UInt8Array('rgb', 3)
+    .Struct('key_config', key_config_t)
     .UInt8('current_state')
     .UInt32LE('buzzer_active_remaining_ms')
     .compile();

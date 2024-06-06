@@ -22,6 +22,7 @@
 #include "FastLED.h"
 #include "button.h"
 #include <nvm.h>
+#include "custom_usb.h"
 
 #define ESPNOW_MAXDELAY         512
 #define ESPNOW_QUEUE_SIZE       10
@@ -157,6 +158,7 @@ void send_state_update() {
         .battery_voltage            = battery_voltage,
         .color                      = buzzer_color,
         .rgb                        = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
+        .key_config                 = nvm_data.key_config,
         .current_state              = current_state,
         .buzzer_active_remaining_ms = current_state == STATE_BUZZER_ACTIVE
                                           ? (time > buzzer_active_until ? 0 : (buzzer_active_until - time))
@@ -362,6 +364,15 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
                 }
             }
             break;
+        case COMMAND_SET_KEY_CONFIG:
+            {
+                key_config_t *key_config = &command->args.key_config;
+                log_d("Received key config update.");
+                nvm_data.key_config = *key_config;
+                nvm_save();
+                return true;
+            }
+            break;
         case COMMAND_BUZZ:
             buzz();
             return true;
@@ -464,9 +475,24 @@ static void comm_task(void *pvParameter) {
 
                                     // Handle state data
                                     if (current_state != STATE_BUZZER_ACTIVE &&
-                                        node_info->current_state == STATE_BUZZER_ACTIVE &&
-                                        node_info->buzzer_active_remaining_ms > 0) {
-                                        if (buzzer_disabled_until < time + node_info->buzzer_active_remaining_ms) {
+                                        node_info->current_state == STATE_BUZZER_ACTIVE) {
+
+#ifdef CONFIG_TINYUSB_ENABLED
+                                        if ((node_info->key_config.modifiers & (1 << 0)) != 0) Keyboard.press(KEY_LEFT_CTRL);
+                                        if ((node_info->key_config.modifiers & (1 << 1)) != 0) Keyboard.press(KEY_LEFT_ALT);
+                                        if ((node_info->key_config.modifiers & (1 << 2)) != 0) Keyboard.press(KEY_LEFT_SHIFT);
+                                        if ((node_info->key_config.modifiers & (1 << 3)) != 0) Keyboard.press(KEY_LEFT_GUI);
+                                        if ((node_info->key_config.modifiers & (1 << 4)) != 0) Keyboard.press(KEY_RIGHT_CTRL);
+                                        if ((node_info->key_config.modifiers & (1 << 5)) != 0) Keyboard.press(KEY_RIGHT_ALT);
+                                        if ((node_info->key_config.modifiers & (1 << 6)) != 0) Keyboard.press(KEY_RIGHT_SHIFT);
+                                        if ((node_info->key_config.modifiers & (1 << 7)) != 0) Keyboard.press(KEY_RIGHT_GUI);
+
+                                        Keyboard.pressRaw(node_info->key_config.scan_code);
+                                        Keyboard.releaseAll();
+#endif
+
+                                        if (node_info->buzzer_active_remaining_ms > 0 &&
+                                            buzzer_disabled_until < time + node_info->buzzer_active_remaining_ms) {
                                             time_of_last_keep_alive_communication = time; // This is a notable event -> reset shutdown timer
 
                                             if (!nvm_data.game_config.can_buzz_while_other_is_active) {

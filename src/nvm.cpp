@@ -20,7 +20,8 @@ void nvm_setup() {
                 .buzz_effect                     = EFFECT_FLASH_WHITE,
                 .can_buzz_while_other_is_active  = false,
                 .must_release_before_pressing    = true,
-            }
+            },
+            .key_config = { .modifiers = 0, .scan_code = 0 }
         };
 
         nvm_save();

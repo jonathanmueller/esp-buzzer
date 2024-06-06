@@ -62,12 +62,18 @@ enum node_type_t : uint8_t {
 };
 
 typedef struct {
+    uint8_t modifiers;
+    uint8_t scan_code;
+} __attribute__((packed)) key_config_t;
+
+typedef struct {
     uint8_t version; /* Must match CONFIG_VERSION */
     node_type_t node_type;
     uint8_t battery_percent;
     uint32_t battery_voltage;
     color_t color;
     uint8_t rgb[3];
+    key_config_t key_config;
     node_state_t current_state;
     uint32_t buzzer_active_remaining_ms;
 } __attribute__((packed)) payload_node_info_t;
@@ -101,6 +107,7 @@ enum command_t : uint8_t {
     COMMAND_SET_PING_INTERVAL = 0x10,
     COMMAND_SET_COLOR         = 0x20,
     COMMAND_SET_GAME_CONFIG   = 0x21,
+    COMMAND_SET_KEY_CONFIG    = 0x22,
     COMMAND_BUZZ              = 0x30,
     COMMAND_SET_INACTIVE      = 0x31,
     COMMAND_SET_ACTIVE        = 0x32,
@@ -116,6 +123,7 @@ typedef struct {
             uint8_t rgb[3];
         } __attribute__((packed)) set_color;
         game_config_t game_config;
+        key_config_t key_config;
         uint8_t raw[0];
     } __attribute__((packed)) args;
 } __attribute__((packed)) payload_command_t;

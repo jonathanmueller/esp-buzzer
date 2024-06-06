@@ -1,10 +1,10 @@
 import { Button, Card, CardBody, CardFooter, CardHeader, Chip, Divider, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Popover, PopoverContent, PopoverTrigger, Spinner, Switch, Tooltip } from '@nextui-org/react';
 import { Buffer } from 'buffer';
 import classNames from "classnames";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowClockwise, InfoCircle, Palette, Power, Reception0, Reception1, Reception2, Reception3, Reception4 } from 'react-bootstrap-icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowClockwise, Command, InfoCircle, Option, Palette, Power, Reception0, Reception1, Reception2, Reception3, Reception4, Shift } from 'react-bootstrap-icons';
 import { CirclePicker } from 'react-color';
-import { DeviceInfo, arr_peer_data_t, isBroadcastMac, node_info_t, node_state_t, peer_data_t } from "./util";
+import { DeviceInfo, arr_peer_data_t, isBroadcastMac, key_config_t, key_modifier_t, node_info_t, node_state_t, peer_data_t } from "./util";
 
 
 export type DeviceNetworkInfoProps = {
@@ -81,6 +81,7 @@ export function PeerInfo(props: PeerInfoProps) {
     const { peer, deviceInfo, handleError } = props;
     const color = peer.valid_version ? colorFromPeerInfo(peer.node_info) : 'gray';
     const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showKeybindPicker, setShowKeybindPicker] = useState(false);
 
     const sendCommand = useCallback((data: number[]) =>
         deviceInfo.device.controlTransferOut({
@@ -103,6 +104,7 @@ export function PeerInfo(props: PeerInfoProps) {
 
     const menuActions = useMemo(() => ({
         "setColor": () => setTimeout(() => setShowColorPicker(true), 100),
+        "setKeyConfig": () => setTimeout(() => setShowKeybindPicker(true), 0),
         "reset": () => sendCommand([0x40]),
         "shutdown": () => sendCommand([0x50])
     }), [sendCommand]);
@@ -134,6 +136,7 @@ export function PeerInfo(props: PeerInfoProps) {
                     isDisabled={!peer.valid_version}
                     className=" mx-auto m-5 w-40 h-auto rounded-full aspect-square shadow-md shadow-black ring-2 ring-white bg-[var(--color)]"
                     onPress={buzz} />
+                {peer.valid_version && <div className="absolute bottom-0 right-0 me-2 mb-2 px-2 py-1 text-xs border rounded-md border-gray-600 text-gray-500">{renderKeyConfig(peer.node_info.key_config)}</div>}
             </CardBody>
 
             <Divider />
@@ -149,7 +152,8 @@ export function PeerInfo(props: PeerInfoProps) {
                         </Button>
                     </DropdownTrigger>
                     <DropdownMenu onAction={key => menuActions[key as keyof typeof menuActions]()} aria-label="Buzzer Optionen">
-                        <DropdownItem showDivider key="setColor" startContent={<Palette />}>Farbe</DropdownItem>
+                        <DropdownItem key="setColor" startContent={<Palette />}>Farbe</DropdownItem>
+                        <DropdownItem showDivider key="setKeyConfig" startContent={<Command />}>Keybind setzen</DropdownItem>
                         <DropdownItem key="reset" startContent={<ArrowClockwise />}>Reset</DropdownItem>
                         <DropdownItem key="shutdown" className="text-danger" color='danger' startContent={<Power />}>Ausschalten</DropdownItem>
                     </DropdownMenu>
@@ -160,12 +164,115 @@ export function PeerInfo(props: PeerInfoProps) {
                         <CirclePicker color={color} onChange={v => sendCommand([0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
                     </PopoverContent>
                 </Popover>
+                <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showKeybindPicker} onOpenChange={(open) => setShowKeybindPicker(open)}>
+                    <PopoverTrigger><span></span></PopoverTrigger>
+                    <PopoverContent className="p-5">
+                        <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand([0x22, v.modifiers, v.scan_code])} />
+                    </PopoverContent>
+                </Popover>
             </CardFooter>
         </Card>
     </>;
 }
 
 
+function renderKeyConfig(key_config: key_config_t) {
+    const { modifiers, scan_code } = key_config;
+
+    let char = "";
+    if (scan_code >= 0x04 && scan_code <= 0x1d) {
+        char = String.fromCharCode(scan_code - 0x04 + 'A'.charCodeAt(0));
+    } else if (scan_code >= 0x1e && scan_code <= 0x27) {
+        char = String.fromCharCode(((scan_code - 0x1d) % 10) + '0'.charCodeAt(0));
+    } else {
+        char = "";
+    }
+
+    return <div className="flex flex-row h-full items-center w-full justify-center" style={{ gap: ".35em" }}>
+        {((modifiers & key_modifier_t.ALL_CTRL) !== 0) && `Ctrl`}
+        {((modifiers & key_modifier_t.ALL_SHIFT) !== 0) && <Shift />}
+        {((modifiers & key_modifier_t.ALL_ALT) !== 0) && <Option />}
+        {((modifiers & key_modifier_t.ALL_GUI) !== 0) && <Command />}
+        <div>{char}</div>
+    </div >;
+}
+
+type KeybindPickerProps = {
+    keybind: key_config_t,
+    onChange: (config: key_config_t) => void;
+};
+
+function KeybindPicker(props: KeybindPickerProps) {
+    const { keybind, onChange } = props;
+    const keybindElement = useRef<HTMLDivElement>(null);
+
+    const [newKeybind, setNewKeybind] = useState<key_config_t>(keybind);
+    const [modifiersLocked, setModifiersLocked] = useState(false);
+    const [mainCharPressed, setMainCharPressed] = useState(false);
+
+    useEffect(() => {
+        console.log("Focus...");
+        keybindElement.current?.focus();
+    }, []);
+
+
+    const keyDownUp = useCallback((e: React.KeyboardEvent) => {
+        e.preventDefault();
+        if (e.repeat) { return; }
+
+        let { modifiers, scan_code } = newKeybind;
+
+        let currentModifiers = 0;
+        if (e.getModifierState('Control')) currentModifiers |= key_modifier_t.LEFT_CTRL;
+        if (e.getModifierState('Shift')) currentModifiers |= key_modifier_t.LEFT_SHIFT;
+        if (e.getModifierState('Alt')) currentModifiers |= key_modifier_t.LEFT_ALT;
+        if (e.getModifierState('Meta')) currentModifiers |= key_modifier_t.LEFT_GUI;
+
+        if (!modifiersLocked) {
+            modifiers = currentModifiers;
+        }
+
+        if (e.type == "keyup") {
+            if (currentModifiers === 0 && !mainCharPressed) {
+                setModifiersLocked(false);
+            }
+        }
+        const mainButtonPressed = (new_scan_code: number) => {
+            if (e.type == "keydown") {
+                scan_code = new_scan_code;
+                setModifiersLocked(true);
+            }
+            if (scan_code === newKeybind.scan_code) setMainCharPressed(e.type == "keydown");
+        };
+
+        if (e.key.toLowerCase().match(/^[a-z]$/)) {
+            mainButtonPressed(0x04 + (e.key.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0)));
+            // if (e.type == "keydown") {
+            //     scan_code = 0x04 + (e.key.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
+            //     setModifiersLocked(true);
+            // }
+            // if (scan_code === newKeybind.scan_code) setMainCharPressed(e.type == "keydown");
+        } else if (e.code.match(/^(Digit|Numpad)/)) {
+            mainButtonPressed(0x1d + ((e.code.replace(/^(Digit|Numpad)/, "").charCodeAt(0) - '0'.charCodeAt(0)) % 10));
+            // if (e.type == "keydown") {
+            //     scan_code = 0x1d + ((e.code.replace(/^(Digit|Numpad)/, "").charCodeAt(0) - '0'.charCodeAt(0)) % 10);
+            //     setModifiersLocked(true);
+            // }
+            // if (scan_code === newKeybind.scan_code) setMainCharPressed(e.type == "keydown");
+        } else if (e.type == "keydown") {
+            scan_code = 0;
+        }
+
+
+        setNewKeybind({ modifiers, scan_code });
+    }, [modifiersLocked, newKeybind]);
+
+
+    return <div className="flex flex-row flex-nowrap">
+        <div tabIndex={1} ref={keybindElement} onKeyDown={keyDownUp} onKeyUp={keyDownUp} className="w-24 px-2 py-1 rounded-md border-2 border-gray-600">{renderKeyConfig(newKeybind)}</div>
+        <Button variant="bordered" className="ml-5 px-5" onClick={() => onChange(newKeybind)}>Speichern</Button>
+    </div>;
+}
 
 export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
     const { deviceInfo, handleError } = props;
