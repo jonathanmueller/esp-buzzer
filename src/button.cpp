@@ -89,6 +89,8 @@ void config_loop() {
     nvm_save();
 }
 
+static CEveryNMillis buzzStateUpdate(ACCOUNCEMENT_INTERVAL_WHILE_ACTIVE);
+
 void buzz() {
     log_i("BUZZ! Sending state update");
 
@@ -96,10 +98,15 @@ void buzz() {
     set_state(STATE_BUZZER_ACTIVE);
     buzzer_active_until = time + nvm_data.game_config.buzzer_active_time;
     send_state_update();
+    buzzStateUpdate.reset();
 }
 
 void button_loop() {
     unsigned long time = millis();
+
+    if (current_state == STATE_BUZZER_ACTIVE && buzzStateUpdate) {
+        send_state_update();
+    }
 
     static CEveryNMillis debounceBackButtonRelease(50);
     if (digitalRead(BACK_BUTTON_PIN) == LOW) {

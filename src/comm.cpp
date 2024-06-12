@@ -462,13 +462,17 @@ static void comm_task(void *pvParameter) {
                                     peer_data_t *peer_data;
                                     ESP_ERROR_CHECK(get_or_create_peer_info(recv_cb->mac_addr, &peer_data));
 
-                                    peer_data->last_seen     = time;
-                                    peer_data->valid_version = (node_info->version == VERSION_CODE);
+                                    uint8_t peer_previous_state = peer_data->node_info.current_state;
+                                    peer_data->last_seen        = time;
+                                    peer_data->valid_version    = (node_info->version == VERSION_CODE);
                                     if (peer_data->valid_version) {
                                         memcpy(&peer_data->node_info, node_info, sizeof(payload_node_info_t));
+                                    } else {
+                                        peer_previous_state = STATE_IDLE;
                                     }
 
                                     if (notSeenBefore) {
+                                        peer_previous_state = STATE_IDLE;
                                         /* Ping when we first see them */
                                         send_ping(recv_cb->mac_addr);
                                     }
@@ -478,17 +482,19 @@ static void comm_task(void *pvParameter) {
                                         node_info->current_state == STATE_BUZZER_ACTIVE) {
 
 #ifdef CONFIG_TINYUSB_ENABLED
-                                        if ((node_info->key_config.modifiers & (1 << 0)) != 0) Keyboard.press(KEY_LEFT_CTRL);
-                                        if ((node_info->key_config.modifiers & (1 << 1)) != 0) Keyboard.press(KEY_LEFT_ALT);
-                                        if ((node_info->key_config.modifiers & (1 << 2)) != 0) Keyboard.press(KEY_LEFT_SHIFT);
-                                        if ((node_info->key_config.modifiers & (1 << 3)) != 0) Keyboard.press(KEY_LEFT_GUI);
-                                        if ((node_info->key_config.modifiers & (1 << 4)) != 0) Keyboard.press(KEY_RIGHT_CTRL);
-                                        if ((node_info->key_config.modifiers & (1 << 5)) != 0) Keyboard.press(KEY_RIGHT_ALT);
-                                        if ((node_info->key_config.modifiers & (1 << 6)) != 0) Keyboard.press(KEY_RIGHT_SHIFT);
-                                        if ((node_info->key_config.modifiers & (1 << 7)) != 0) Keyboard.press(KEY_RIGHT_GUI);
+                                        if (peer_previous_state != STATE_BUZZER_ACTIVE) {
+                                            if ((node_info->key_config.modifiers & (1 << 0)) != 0) Keyboard.press(KEY_LEFT_CTRL);
+                                            if ((node_info->key_config.modifiers & (1 << 1)) != 0) Keyboard.press(KEY_LEFT_ALT);
+                                            if ((node_info->key_config.modifiers & (1 << 2)) != 0) Keyboard.press(KEY_LEFT_SHIFT);
+                                            if ((node_info->key_config.modifiers & (1 << 3)) != 0) Keyboard.press(KEY_LEFT_GUI);
+                                            if ((node_info->key_config.modifiers & (1 << 4)) != 0) Keyboard.press(KEY_RIGHT_CTRL);
+                                            if ((node_info->key_config.modifiers & (1 << 5)) != 0) Keyboard.press(KEY_RIGHT_ALT);
+                                            if ((node_info->key_config.modifiers & (1 << 6)) != 0) Keyboard.press(KEY_RIGHT_SHIFT);
+                                            if ((node_info->key_config.modifiers & (1 << 7)) != 0) Keyboard.press(KEY_RIGHT_GUI);
 
-                                        Keyboard.pressRaw(node_info->key_config.scan_code);
-                                        Keyboard.releaseAll();
+                                            Keyboard.pressRaw(node_info->key_config.scan_code);
+                                            Keyboard.releaseAll();
+                                        }
 #endif
 
                                         if (node_info->buzzer_active_remaining_ms > 0 &&
