@@ -370,6 +370,7 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
                 log_d("Received key config update.");
                 nvm_data.key_config = *key_config;
                 nvm_save();
+                send_state_update();
                 return true;
             }
             break;

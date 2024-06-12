@@ -94,7 +94,7 @@ void led_task(void *param) {
                 case STATE_IDLE:
                     {
                         // fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
-                        CRGB target = baseColor.nscale8_video(20);
+                        CRGB target = baseColor.nscale8_video(30);
                         fill_solid(leds, NUM_LEDS, target);
                     }
                     break;
@@ -139,7 +139,7 @@ void led_task(void *param) {
                     }
                     break;
                 case STATE_SHOW_BATTERY:
-                    fill_solid(leds, NUM_LEDS, CRGB(0, 0, 255));
+                    fill_solid(leds, NUM_LEDS, 0);
                     for (uint8_t i = 0; i < NUM_LEDS * battery_percent; i++) {
                         uint8_t rg = i * 255.0f / NUM_LEDS;
                         leds[i]    = CRGB(255 - rg, rg, 0);

@@ -7,6 +7,10 @@ export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
 };
 
+export function isZeroMac(mac_addr: Uint8Array) {
+    return mac_addr.every(x => x === 0x00);
+}
+
 export enum node_state_t {
     STATE_IDLE,
     STATE_DISABLED,

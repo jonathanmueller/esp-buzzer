@@ -4,7 +4,7 @@ import classNames from "classnames";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, Command, InfoCircle, Option, Palette, Power, Reception0, Reception1, Reception2, Reception3, Reception4, Shift } from 'react-bootstrap-icons';
 import { CirclePicker } from 'react-color';
-import { DeviceInfo, arr_peer_data_t, isBroadcastMac, key_config_t, key_modifier_t, node_info_t, node_state_t, peer_data_t } from "./util";
+import { DeviceInfo, arr_peer_data_t, isBroadcastMac, isZeroMac, key_config_t, key_modifier_t, node_info_t, node_state_t, peer_data_t } from "./util";
 
 
 export type DeviceNetworkInfoProps = {
@@ -103,11 +103,11 @@ export function PeerInfo(props: PeerInfoProps) {
     const setActive = useCallback((active: boolean) => { sendCommand([active ? 0x32 : 0x31]); _setActive(active); }, [sendCommand]);
 
     const menuActions = useMemo(() => ({
-        "setColor": () => setTimeout(() => setShowColorPicker(true), 100),
-        "setKeyConfig": () => setTimeout(() => setShowKeybindPicker(true), 0),
+        "setColor": () => setShowColorPicker(true),
+        "setKeyConfig": () => setShowKeybindPicker(true),
         "reset": () => sendCommand([0x40]),
         "shutdown": () => sendCommand([0x50])
-    }), [sendCommand]);
+    }), [sendCommand, setShowKeybindPicker, setShowColorPicker]);
 
     return <>
         <Card className={classNames("transition",
@@ -158,19 +158,19 @@ export function PeerInfo(props: PeerInfoProps) {
                         <DropdownItem key="shutdown" className="text-danger" color='danger' startContent={<Power />}>Ausschalten</DropdownItem>
                     </DropdownMenu>
                 </Dropdown>
-                <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showColorPicker} onOpenChange={(open) => setShowColorPicker(open)}>
-                    <PopoverTrigger><span></span></PopoverTrigger>
-                    <PopoverContent className="p-5">
-                        <CirclePicker color={color} onChange={v => sendCommand([0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
-                    </PopoverContent>
-                </Popover>
-                <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showKeybindPicker} onOpenChange={(open) => setShowKeybindPicker(open)}>
-                    <PopoverTrigger><span></span></PopoverTrigger>
-                    <PopoverContent className="p-5">
-                        <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand([0x22, v.modifiers, v.scan_code])} />
-                    </PopoverContent>
-                </Popover>
             </CardFooter>
+            <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showColorPicker} onOpenChange={(open) => setShowColorPicker(open)}>
+                <PopoverTrigger><span></span></PopoverTrigger>
+                <PopoverContent className="p-5">
+                    <CirclePicker color={color} onChange={v => sendCommand([0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
+                </PopoverContent>
+            </Popover>
+            <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showKeybindPicker} onOpenChange={(open) => setShowKeybindPicker(open)}>
+                <PopoverTrigger><span></span></PopoverTrigger>
+                <PopoverContent className="p-5">
+                    <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand([0x22, v.modifiers, v.scan_code])} />
+                </PopoverContent>
+            </Popover>
         </Card>
     </>;
 }
@@ -182,8 +182,13 @@ function renderKeyConfig(key_config: key_config_t) {
     let char = "";
     if (scan_code >= 0x04 && scan_code <= 0x1d) {
         char = String.fromCharCode(scan_code - 0x04 + 'A'.charCodeAt(0));
-    } else if (scan_code >= 0x1e && scan_code <= 0x27) {
+    } else if (scan_code >= 0x1E && scan_code <= 0x27) {
         char = String.fromCharCode(((scan_code - 0x1d) % 10) + '0'.charCodeAt(0));
+    } else if (scan_code >= 0x3A && scan_code <= 0x45) {
+        char = `F${(scan_code - 0x39)}`;
+        console.log(char);
+    } else if (GLYPHS[scan_code] !== undefined) {
+        char = GLYPHS[scan_code];
     } else {
         char = "";
     }
@@ -202,6 +207,50 @@ type KeybindPickerProps = {
     onChange: (config: key_config_t) => void;
 };
 
+const KEY_REPORTS: { [code: string]: number; } = {
+    "Enter": 0x28,
+    "Escape": 0x29,
+    "Backspace": 0x2A,
+    "Tab": 0x2B,
+    "Space": 0x2C,
+    "ArrowLeft": 0x50,
+    "ArrowUp": 0x52,
+    "ArrowRight": 0x4F,
+    "ArrowDown": 0x51,
+    "Period": 0x37,
+    "Insert": 0x49,
+    "Home": 0x4a,
+    "PageUp": 0x4b,
+    "Delete": 0x4c,
+    "End": 0x4d,
+    "PageDown": 0x4e,
+    "PrintScreen": 0x46,
+    "ScrollLock": 0x47,
+    "Pause": 0x48,
+};
+
+const GLYPHS: { [scan_code: number]: string; } = {
+    [KEY_REPORTS["Enter"]]: "enter",
+    [KEY_REPORTS["Escape"]]: "Esc",
+    [KEY_REPORTS["Backspace"]]: "backspace",
+    [KEY_REPORTS["Tab"]]: "⭾",
+    [KEY_REPORTS["Space"]]: "␣",
+    [KEY_REPORTS["ArrowLeft"]]: "🡐",
+    [KEY_REPORTS["ArrowUp"]]: "🡑",
+    [KEY_REPORTS["ArrowRight"]]: "🡒",
+    [KEY_REPORTS["ArrowDown"]]: "🡓",
+    [KEY_REPORTS["Period"]]: ".",
+    [KEY_REPORTS["Insert"]]: "Insert",
+    [KEY_REPORTS["Home"]]: "Home",
+    [KEY_REPORTS["PageUp"]]: "Page🡑",
+    [KEY_REPORTS["Delete"]]: "Delete",
+    [KEY_REPORTS["End"]]: "End",
+    [KEY_REPORTS["PageDown"]]: "Page🡓",
+    [KEY_REPORTS["PrintScreen"]]: "PrintScreen",
+    [KEY_REPORTS["Pause"]]: "Pause",
+    [KEY_REPORTS["ScrollLock"]]: "ScrollLock",
+};
+
 function KeybindPicker(props: KeybindPickerProps) {
     const { keybind, onChange } = props;
     const keybindElement = useRef<HTMLDivElement>(null);
@@ -209,11 +258,6 @@ function KeybindPicker(props: KeybindPickerProps) {
     const [newKeybind, setNewKeybind] = useState<key_config_t>(keybind);
     const [modifiersLocked, setModifiersLocked] = useState(false);
     const [mainCharPressed, setMainCharPressed] = useState(false);
-
-    useEffect(() => {
-        console.log("Focus...");
-        keybindElement.current?.focus();
-    }, []);
 
 
     const keyDownUp = useCallback((e: React.KeyboardEvent) => {
@@ -238,38 +282,38 @@ function KeybindPicker(props: KeybindPickerProps) {
             }
         }
         const mainButtonPressed = (new_scan_code: number) => {
-            if (e.type == "keydown") {
+            if (e.type == "keydown" || (e.code === "PrintScreen")) {
                 scan_code = new_scan_code;
                 setModifiersLocked(true);
             }
-            if (scan_code === newKeybind.scan_code) setMainCharPressed(e.type == "keydown");
+            if (e.type == "keydown") setMainCharPressed(true);
+            else if (scan_code === newKeybind.scan_code) {
+                setMainCharPressed(false);
+                if (currentModifiers === 0) {
+                    setModifiersLocked(false);
+                }
+            }
         };
 
         if (e.key.toLowerCase().match(/^[a-z]$/)) {
             mainButtonPressed(0x04 + (e.key.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0)));
-            // if (e.type == "keydown") {
-            //     scan_code = 0x04 + (e.key.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0));
-            //     setModifiersLocked(true);
-            // }
-            // if (scan_code === newKeybind.scan_code) setMainCharPressed(e.type == "keydown");
-        } else if (e.code.match(/^(Digit|Numpad)/)) {
-            mainButtonPressed(0x1d + ((e.code.replace(/^(Digit|Numpad)/, "").charCodeAt(0) - '0'.charCodeAt(0)) % 10));
-            // if (e.type == "keydown") {
-            //     scan_code = 0x1d + ((e.code.replace(/^(Digit|Numpad)/, "").charCodeAt(0) - '0'.charCodeAt(0)) % 10);
-            //     setModifiersLocked(true);
-            // }
-            // if (scan_code === newKeybind.scan_code) setMainCharPressed(e.type == "keydown");
+        } else if (e.code.match(/^(Digit|Numpad)\d$/)) {
+            mainButtonPressed(0x1D + ((e.code.replace(/^(Digit|Numpad)/, "").charCodeAt(0) - '0'.charCodeAt(0)) % 10));
+        } else if (e.code.match(/^F\d+$/)) {
+            mainButtonPressed(0x39 + parseInt(e.code.replace(/^F/, "")));
+        } else if (KEY_REPORTS[e.code] !== undefined) {
+            mainButtonPressed(KEY_REPORTS[e.code]);
         } else if (e.type == "keydown") {
             scan_code = 0;
         }
 
 
         setNewKeybind({ modifiers, scan_code });
-    }, [modifiersLocked, newKeybind]);
+    }, [mainCharPressed, modifiersLocked, newKeybind]);
 
 
     return <div className="flex flex-row flex-nowrap">
-        <div tabIndex={1} ref={keybindElement} onKeyDown={keyDownUp} onKeyUp={keyDownUp} className="w-24 px-2 py-1 rounded-md border-2 border-gray-600">{renderKeyConfig(newKeybind)}</div>
+        <div tabIndex={1} ref={keybindElement} onKeyDown={keyDownUp} onKeyUp={keyDownUp} className="min-w-24 px-2 py-1 rounded-md border-2 border-gray-600">{renderKeyConfig(newKeybind)}</div>
         <Button variant="bordered" className="ml-5 px-5" onClick={() => onChange(newKeybind)}>Speichern</Button>
     </div>;
 }
@@ -292,7 +336,7 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
                 if (result.data) {
                     const buf = Buffer.from(result.data.buffer);
                     const peers = new arr_peer_data_t(buf).peer_data_t;
-                    setPeers(peers.filter(peer => !isBroadcastMac(peer.mac_addr)));
+                    setPeers(peers.filter(peer => !isBroadcastMac(peer.mac_addr) && !isZeroMac(peer.mac_addr)));
                 } else {
                     setPeers([]);
                 }

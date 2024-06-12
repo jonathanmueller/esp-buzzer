@@ -155,7 +155,9 @@ void button_loop() {
             buzzer_disabled_until = time + nvm_data.game_config.deactivation_time_after_buzzing;
         }
         send_state_update();
-    } else if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
+    }
+
+    if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
         log_d("Re-enabling.");
         set_state(STATE_IDLE);
         send_state_update();
