@@ -40,5 +40,8 @@
 #define FLASH_EFFECT_PRE_FLASH_DURATION    100
 #define FLASH_EFFECT_DURATION              600
 
+#define BRIGHTNESS_IDLE                    30
+#define BRIGHTNESS_DISABLED                5
+
 #define ACTIVE_EFFECT_NUM_WAVES            4
 #define ACTIVE_EFFECT_SPEED                6

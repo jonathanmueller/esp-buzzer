@@ -93,9 +93,7 @@ void led_task(void *param) {
             switch (current_state) {
                 case STATE_IDLE:
                     {
-                        // fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
-                        CRGB target = baseColor.nscale8_video(30);
-                        fill_solid(leds, NUM_LEDS, target);
+                        fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_IDLE));
                     }
                     break;
                 case STATE_CONFIG:
@@ -103,13 +101,13 @@ void led_task(void *param) {
                     break;
                 case STATE_SHUTDOWN:
                     {
-                        fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(20));
+                        fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_IDLE));
                         uint8_t leds_to_shutoff = ((float)time_since_state_change / SHUTDOWN_ANIMATION_DURATION) * NUM_LEDS;
                         fill_solid(&leds[(NUM_LEDS - leds_to_shutoff) / 2], leds_to_shutoff, 0);
                     }
                     break;
                 case STATE_DISABLED:
-                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(5));
+                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_DISABLED));
                     break;
                 case STATE_BUZZER_ACTIVE:
                     uint8_t scale;
