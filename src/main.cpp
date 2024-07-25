@@ -5,6 +5,7 @@
 #include "comm.h"
 #include "custom_usb.h"
 #include "nvm.h"
+#include "bluetooth.h"
 
 static RTC_NOINIT_ATTR uint8_t boot_attempts = 0;
 void check_safe_mode() {
@@ -41,6 +42,8 @@ void setup(void) {
     led_setup();
 
     comm_setup();
+
+    bluetooth_init();
 }
 
 void loop() {
