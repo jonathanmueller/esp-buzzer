@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
+import BluetoothDeviceController from './BluetoothDeviceController';
 import DeviceNetworkInfo from './DeviceNetworkInfo';
 import GameBar from './GameBar';
 import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_CDC, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
@@ -199,13 +200,21 @@ function App() {
   }, [deviceVersion]);
 
 
-  if (!navigator.usb) {
+  if (!navigator.usb && !navigator.bluetooth) {
     return <div className='bg-gray-800 '>
       <div className="mx-auto pt-10 container flex flex-col min-h-screen">
         <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
           <div className={classNames("connect-icon h-[5rem] my-[-0.5rem] self-center", "bg-red-900")} />
           <p className='mx-auto text-red-300 text-2xl font-extralight'>Dieser Browser wird leider nicht unterstützt.</p>
         </div>
+      </div>
+    </div>;
+  }
+
+  if (!navigator.usb) {
+    return <div className='bg-gray-800 '>
+      <div className="mx-auto pt-10 container flex flex-col min-h-screen">
+        <BluetoothDeviceController />
       </div>
     </div>;
   }
@@ -251,7 +260,10 @@ function App() {
             <DeviceLogViewer deviceInfo={deviceInfo} handleError={handleError} />
           </div> */}
         </div>}
+
+        <BluetoothDeviceController />
       </div>
+
     </div>
   );
 }
