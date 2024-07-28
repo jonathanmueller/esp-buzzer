@@ -7,13 +7,13 @@ import { CirclePicker } from 'react-color';
 import { DeviceInfo, arr_peer_data_t, isBroadcastMac, isZeroMac, key_config_t, key_modifier_t, node_info_t, node_state_t, peer_data_t } from "./util";
 
 
-export type DeviceNetworkInfoProps = {
+export type USBDeviceNetworkInfoProps = {
     deviceInfo: DeviceInfo,
     handleError: (e: any) => void;
 };
 
 type PeerInfoProps = {
-    deviceInfo: DeviceInfo,
+    sendCommand: (peer: peer_data_t, data: number[]) => void,
     peer: peer_data_t,
     handleError: (e: any) => void;
 };
@@ -78,35 +78,21 @@ function getBatteryIcon(battery: number) {
 
 
 export function PeerInfo(props: PeerInfoProps) {
-    const { peer, deviceInfo, handleError } = props;
+    const { peer, sendCommand, handleError } = props;
     const color = peer.valid_version ? colorFromPeerInfo(peer.node_info) : 'gray';
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [showKeybindPicker, setShowKeybindPicker] = useState(false);
 
-    const sendCommand = useCallback((data: number[]) =>
-        deviceInfo.device.controlTransferOut({
-            requestType: "vendor",
-            recipient: "device",
-            request: 0x30,  // Command
-            value: 0,
-            index: 0
-        }, new Uint8Array([...peer.mac_addr, ...data]))
-            .then(result => {
-                console.log("result ", result);
-            })
-            .catch(handleError),
-        [deviceInfo, peer, handleError]);
-
-    const buzz = useCallback(() => sendCommand([0x30]), [sendCommand]);
+    const buzz = useCallback(() => sendCommand(peer, [0x30]), [sendCommand]);
     const [active, _setActive] = useState(peer.node_info.current_state != 1);
     useEffect(() => { if (peer.node_info.current_state != 1) { _setActive(true); } }, [peer.node_info.current_state]);
-    const setActive = useCallback((active: boolean) => { sendCommand([active ? 0x32 : 0x31]); _setActive(active); }, [sendCommand]);
+    const setActive = useCallback((active: boolean) => { sendCommand(peer, [active ? 0x32 : 0x31]); _setActive(active); }, [sendCommand]);
 
     const menuActions = useMemo(() => ({
         "setColor": () => setShowColorPicker(true),
         "setKeyConfig": () => setShowKeybindPicker(true),
-        "reset": () => sendCommand([0x40]),
-        "shutdown": () => sendCommand([0x50])
+        "reset": () => sendCommand(peer, [0x40]),
+        "shutdown": () => sendCommand(peer, [0x50])
     }), [sendCommand, setShowKeybindPicker, setShowColorPicker]);
 
     return <>
@@ -162,13 +148,13 @@ export function PeerInfo(props: PeerInfoProps) {
             <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showColorPicker} onOpenChange={(open) => setShowColorPicker(open)}>
                 <PopoverTrigger><span></span></PopoverTrigger>
                 <PopoverContent className="p-5">
-                    <CirclePicker color={color} onChange={v => sendCommand([0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
+                    <CirclePicker color={color} onChange={v => sendCommand(peer, [0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
                 </PopoverContent>
             </Popover>
             <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showKeybindPicker} onOpenChange={(open) => setShowKeybindPicker(open)}>
                 <PopoverTrigger><span></span></PopoverTrigger>
                 <PopoverContent className="p-5">
-                    <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand([0x22, v.modifiers, v.scan_code])} />
+                    <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand(peer, [0x22, v.modifiers, v.scan_code])} />
                 </PopoverContent>
             </Popover>
         </Card>
@@ -318,7 +304,7 @@ function KeybindPicker(props: KeybindPickerProps) {
     </div>;
 }
 
-export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
+export function USBDeviceNetworkInfo(props: USBDeviceNetworkInfoProps) {
     const { deviceInfo, handleError } = props;
     const { device } = deviceInfo;
 
@@ -336,7 +322,7 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
                 if (result.data) {
                     const buf = Buffer.from(result.data.buffer);
                     const peers = new arr_peer_data_t(buf).peer_data_t;
-                    setPeers(peers.filter(peer => !isBroadcastMac(peer.mac_addr) && !isZeroMac(peer.mac_addr)));
+                    setPeers(peers);
                 } else {
                     setPeers([]);
                 }
@@ -352,9 +338,36 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
         };
     }, [fetchValue]);
 
+    const sendCommand = useCallback((peer: peer_data_t, data: number[]) =>
+        deviceInfo.device.controlTransferOut({
+            requestType: "vendor",
+            recipient: "device",
+            request: 0x30,  // Command
+            value: 0,
+            index: 0
+        }, new Uint8Array([...peer.mac_addr, ...data]))
+            .then(result => {
+                console.log("result ", result);
+            })
+            .catch(handleError),
+        [deviceInfo, handleError]);
+
+    return <DeviceNetworkInfo peers={peers} sendCommand={sendCommand} handleError={handleError} />;
+}
+
+export type DeviceNetworkInfoProps = {
+    peers: peer_data_t[],
+    sendCommand: (peer: peer_data_t, data: number[]) => void,
+    handleError: (e: any) => void;
+};
+export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
+    const { peers, sendCommand, handleError } = props;
+
+    const filteredPeers = useMemo(() => peers.filter(peer => !isBroadcastMac(peer.mac_addr) && !isZeroMac(peer.mac_addr)), [peers]);
+
     return <div className="mt-5 flex gap-5">
-        {peers.map((peer, i) => <PeerInfo key={i} deviceInfo={deviceInfo} peer={peer} handleError={handleError} />)}
-        {peers.length == 0 && <Card className="p-5"><CardBody><Spinner size="lg" color="white" label="Suche..." /></CardBody></Card>}
+        {filteredPeers.map((peer, i) => <PeerInfo key={i} sendCommand={sendCommand} peer={peer} handleError={handleError} />)}
+        {filteredPeers.length == 0 && <Card className="p-5"><CardBody><Spinner size="lg" color="white" label="Suche..." /></CardBody></Card>}
     </div>;
 }
 

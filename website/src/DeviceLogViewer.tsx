@@ -1,10 +1,11 @@
 import Ansi from "ansi-to-react";
 import { useEffect, useState } from "react";
 import { DeviceNetworkInfoProps } from "./DeviceNetworkInfo";
+import { DeviceInfo } from "./util";
 
 const decoder = new TextDecoder();
 
-type DeviceLogViewerProps = DeviceNetworkInfoProps & {};
+type DeviceLogViewerProps = DeviceNetworkInfoProps & { deviceInfo: DeviceInfo; };
 function DeviceLogViewer(props: DeviceLogViewerProps) {
     const { deviceInfo, handleError } = props;
     const { device } = deviceInfo;

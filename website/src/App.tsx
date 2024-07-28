@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import BluetoothDeviceController from './BluetoothDeviceController';
-import DeviceNetworkInfo from './DeviceNetworkInfo';
+import { USBDeviceNetworkInfo } from './DeviceNetworkInfo';
 import GameBar from './GameBar';
 import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_CDC, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
 
@@ -40,6 +40,9 @@ function App() {
   const [deviceVersion, setDeviceVersion] = useState<number>();
 
   const [refreshDevice, setRefreshDevice] = useState({});
+
+  const [btDevice, setBTDevice] = useState<BluetoothDevice>();
+  const btDeviceRef = useRef(btDevice);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const deviceInfo = useMemo(() => getDeviceInfo(device), [device, device?.opened, refreshDevice]);
@@ -214,7 +217,7 @@ function App() {
   if (!navigator.usb) {
     return <div className='bg-gray-800 '>
       <div className="mx-auto pt-10 container flex flex-col min-h-screen">
-        <BluetoothDeviceController />
+        <BluetoothDeviceController handleError={handleError} />
       </div>
     </div>;
   }
@@ -252,7 +255,7 @@ function App() {
 
         {device && deviceInfo.isConnected && !deviceError && <div className="grid grid-cols-12 gap-3 flex-1">
           <div className="flex-1 col-span-12">
-            <DeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
+            <USBDeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
           </div>
 
           {/* <div className="col-span-4 overflow-x-auto h-full">
@@ -261,7 +264,7 @@ function App() {
           </div> */}
         </div>}
 
-        <BluetoothDeviceController />
+        <BluetoothDeviceController handleError={handleError} />
       </div>
 
     </div>

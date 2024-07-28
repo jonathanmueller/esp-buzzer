@@ -1,19 +1,27 @@
 import { Button } from "@nextui-org/react";
+import { Buffer } from 'buffer';
 import { useCallback, useEffect, useState } from "react";
+import DeviceNetworkInfo from "./DeviceNetworkInfo";
+import { arr_peer_data_t, peer_data_t } from "./util";
 
 interface BluetoothDeviceControllerProps {
     // onConnect: (device: BluetoothDevice) => void;
+    handleError: (e: any) => void;
 }
 
-const SERVICE_UUID = "20d86bb5-f515-4671-8a88-32fddb20920c";
-const CHARACTERISTIC_UUID = "4d3c98dc-2970-496a-bc20-c1295abc9730";
-const textDecoder = new TextDecoder();
-const textEncoder = new TextEncoder();
+const UUID_SERVICE = "20d86bb5-f515-4671-8a88-32fddb20920c";
+const UUID_CHARACTERISTIC_VERSION = "4d3c98dc-2970-496a-bc20-c1295abc9730";
+const UUID_CHARACTERISTIC_EXEC_COMMAND = "d384392d-e53e-4c21-a598-f7bf8ccfcb66";
+const UUID_CHARACTERISTIC_PEER_LIST = "f7551fb0-05c3-4dff-a944-4980f40779e1";
+
 export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps) => {
+    const { handleError } = props;
     const [device, setDevice] = useState<BluetoothDevice>();
 
-    const [characteristic, setCharacteristic] = useState<BluetoothRemoteGATTCharacteristic>();
-    const [value, setValue] = useState<string>();
+    const [peerListCharacteristic, setPeerListCharacteristic] = useState<BluetoothRemoteGATTCharacteristic>();
+    const [execCommandCharacteristic, setExecCommandCharacteristic] = useState<BluetoothRemoteGATTCharacteristic>();
+    const [peers, setPeers] = useState<peer_data_t[]>([]);
+    const [readPeerListInterval, setReadPeerListInterval] = useState<number>();
 
     useEffect(() => {
         if (!navigator.bluetooth?.getDevices) {
@@ -33,7 +41,7 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
             filters: [
                 {
                     // name: "Buzzer Controller",
-                    services: ["20d86bb5-f515-4671-8a88-32fddb20920c"],
+                    services: [UUID_SERVICE],
                 },
             ],
         });
@@ -44,63 +52,73 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
         (async () => {
             if (!device) { return; }
 
-            console.log(device);
+            console.log("Connecting...");
             await device.gatt?.connect();
 
-            let service = await device.gatt?.getPrimaryService(SERVICE_UUID);
-            console.log(service);
+            device.addEventListener("gattserverdisconnected", () => setDevice(undefined));
 
-            let characteristic = await service?.getCharacteristic(CHARACTERISTIC_UUID);
-            setCharacteristic(characteristic);
+            let service = await device.gatt?.getPrimaryService(UUID_SERVICE);
+
+            setPeerListCharacteristic(await service?.getCharacteristic(UUID_CHARACTERISTIC_PEER_LIST));
+            setExecCommandCharacteristic(await service?.getCharacteristic(UUID_CHARACTERISTIC_EXEC_COMMAND));
+
+            console.log("Connected");
         })();
     }, [device]);
 
 
-    const readValue = useCallback((characteristic: BluetoothRemoteGATTCharacteristic) => {
-        if (!characteristic) { setValue(undefined); return; }
 
-        (async () => {
-            setValue("Reading...");
-            setValue(textDecoder.decode(await characteristic.readValue()));
-        })();
-    }, []);
+    const readPeerList = useCallback(async () => {
+        if (!peerListCharacteristic) { return; }
 
-    const update = useCallback(() => {
-        if (!device || !characteristic) { return; }
-        (async () => {
-            setValue("Writing...");
-            await characteristic.writeValue(textEncoder.encode("Test value " + Math.floor(Math.random() * 1000)));
+        peerListCharacteristic.readValue().then(data => {
+            console.log("Got updated peer list");
+            const peers = new arr_peer_data_t(Buffer.from(data.buffer)).peer_data_t;
+            setPeers(peers);
+        }).catch(e => {
+            // console.log(e);
+        });
 
-            readValue(characteristic);
-        })();
-    }, [device, characteristic]);
+    }, [peerListCharacteristic, setPeers]);
 
     useEffect(() => {
-        if (!device || !characteristic) { return; }
+        if (!device || !peerListCharacteristic) { return; }
 
-        readValue(characteristic);
+        readPeerList();
 
-        device.oncharacteristicvaluechanged = e => {
-            console.log(e);
+        console.log(peerListCharacteristic);
+
+        peerListCharacteristic.startNotifications().then(_ => {
+            device.oncharacteristicvaluechanged = _ => readPeerList();
+        }).catch(e => {
+            setReadPeerListInterval(setInterval(readPeerList, 1000));
+        });
+
+
+        return () => {
+            clearInterval(readPeerListInterval);
+            setReadPeerListInterval(undefined);
         };
-    }, [device, characteristic, setValue]);
 
+    }, [device, readPeerList, peerListCharacteristic]);
+
+    const sendCommand = useCallback(async (peer: peer_data_t, data: number[]) =>
+        await execCommandCharacteristic?.writeValue(new Uint8Array([...peer.mac_addr, ...data]))
+            .catch(handleError),
+        [execCommandCharacteristic, handleError]);
 
 
     if (!navigator.bluetooth) {
         return <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">Bluetooth not supported</div>;
     }
 
-    return <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
-        {!device && <Button onPress={selectDevice}>Connect</Button>}
-        {device &&
-            <>
-                <Button onPress={() => setDevice(undefined)}>Disconnect</Button>
-                <Button className="ms-4" onPress={update}>Update with random value</Button>
-
-                <div className="ms-4">Current Value: {value}</div>
-            </>}
-    </div >;
+    return <>
+        <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
+            {!device && <Button onPress={selectDevice}>Connect</Button>}
+            {device && <Button onPress={() => setDevice(undefined)}>Disconnect</Button>}
+        </div >
+        {device && peerListCharacteristic && <DeviceNetworkInfo peers={peers} sendCommand={sendCommand} handleError={handleError} />}
+    </>;
 };
 
 export default BluetoothDeviceController;
