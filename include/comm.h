@@ -5,6 +5,7 @@
 #include "esp_now.h"
 #include "led.h"
 #include "_config.h"
+#include "esp_gatt_defs.h"
 
 #undef CONFIG_ESPNOW_ENCRYPT
 
@@ -88,7 +89,10 @@ typedef struct {
     payload_node_info_t node_info;      // The peer's last known node info (i.e. state)
 } __attribute__((packed)) peer_data_t;
 
-extern peer_data_t peer_data_table[ESP_NOW_MAX_TOTAL_PEER_NUM];
+#define ESP_NOTIFY_MTU          514
+#define PEER_DATA_TABLE_ENTRIES (MIN(ESP_NOW_MAX_TOTAL_PEER_NUM, (MIN(ESP_NOTIFY_MTU, ESP_GATT_MAX_ATTR_LEN) / sizeof(peer_data_t))))
+extern peer_data_t peer_data_table[PEER_DATA_TABLE_ENTRIES];
+extern uint8_t my_mac_addr[ESP_NOW_ETH_ALEN];
 
 enum ping_pong_stage_t : uint8_t {
     PING_PONG_STAGE_PING,
@@ -147,7 +151,9 @@ extern "C" {
 
 void cleanup_peer_list();
 void comm_setup();
+void update_my_info();
 void send_state_update();
+void reset_shutdown_timer();
 boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t len);
 
 #ifdef __cplusplus

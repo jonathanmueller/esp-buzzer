@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include "_config.h"
 
 enum node_state_t : uint8_t {

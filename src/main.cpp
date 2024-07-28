@@ -6,6 +6,7 @@
 #include "custom_usb.h"
 #include "nvm.h"
 #include "bluetooth.h"
+#include "_config.h"
 
 static RTC_NOINIT_ATTR uint8_t boot_attempts = 0;
 void check_safe_mode() {

@@ -227,7 +227,7 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
             case USB_REQUEST_VENDOR_DEVICE_NETWORK_INFO:
                 if (requestStage != CONTROL_STAGE_SETUP) { return true; }
 
-                if ((request->wLength != sizeof(peer_data_t) && request->wLength != sizeof(peer_data_table)) || request->wIndex >= ESP_NOW_MAX_TOTAL_PEER_NUM) {
+                if ((request->wLength != sizeof(peer_data_t) && request->wLength != sizeof(peer_data_table)) || request->wIndex >= PEER_DATA_TABLE_ENTRIES) {
                     log_v("invalid length %d, expected %d", request->wLength, sizeof(peer_data_t));
                     break;
                 }

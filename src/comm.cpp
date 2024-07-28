@@ -23,6 +23,7 @@
 #include "button.h"
 #include <nvm.h>
 #include "custom_usb.h"
+#include "bluetooth.h"
 
 #define ESPNOW_MAXDELAY         512
 #define ESPNOW_QUEUE_SIZE       10
@@ -32,10 +33,11 @@ static QueueHandle_t s_comm_queue;
 
 uint8_t comm_task_started                 = false;
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+uint8_t my_mac_addr[ESP_NOW_ETH_ALEN]     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 uint16_t pingInterval = DEFAULT_PING_INTERVAL;
 
-peer_data_t peer_data_table[ESP_NOW_MAX_TOTAL_PEER_NUM];
+peer_data_t peer_data_table[PEER_DATA_TABLE_ENTRIES];
 
 static espnow_data_t s_my_broadcast_info = {
     .type    = ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,
@@ -149,7 +151,13 @@ static void espnow_recv_cb(const uint8_t *src_addr, const uint8_t *data, int len
     }
 }
 
-void send_state_update() {
+void reset_shutdown_timer() {
+    unsigned long time                    = millis();
+    time_of_last_keep_alive_communication = time;
+    time_of_last_seen_peer                = time;
+}
+
+void update_my_info() {
     unsigned long time                    = millis();
     s_my_broadcast_info.payload.node_info = {
         .version                    = VERSION_CODE,
@@ -164,11 +172,20 @@ void send_state_update() {
                                           ? (time > buzzer_active_until ? 0 : (buzzer_active_until - time))
                                           : 0,
     };
+    /* If we're not a controller, the first peer is ourself, otherwise, return */
+    if (has_external_power) { return; }
+
+    peer_data_table[0].last_seen         = time;
+    peer_data_table[0].last_sent_ping_us = micros();
+    peer_data_table[0].node_info         = s_my_broadcast_info.payload.node_info;
+}
+
+void send_state_update() {
+    update_my_info();
 
     if (current_state == STATE_BUZZER_ACTIVE) {
         /* This is notable! Reset shutdown timer */
-        time_of_last_keep_alive_communication = time;
-        time_of_last_seen_peer                = time;
+        reset_shutdown_timer();
     }
 
     esp_err_t ret = esp_now_send(s_broadcast_mac, (const uint8_t *)&s_my_broadcast_info, sizeof(s_my_broadcast_info));
@@ -184,7 +201,7 @@ static esp_err_t get_peer_info(const uint8_t *mac_addr, peer_data_t **data) {
         return ESP_ERR_ESPNOW_ARG;
     }
 
-    for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
+    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
         if (memcmp(peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
             *data = &peer_data_table[i];
             return ESP_OK;
@@ -199,14 +216,14 @@ static esp_err_t get_or_create_peer_info(const uint8_t *mac_addr, peer_data_t **
         return ESP_ERR_ESPNOW_ARG;
     }
 
-    for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
+    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
         if (memcmp(peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
             *data = &peer_data_table[i];
             return ESP_OK;
         }
     }
 
-    for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
+    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
         if (memcmp(peer_data_table[i].mac_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0) {
             memset(&peer_data_table[i], 0, sizeof(peer_data_t));
             memcpy(&peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
@@ -223,7 +240,7 @@ static esp_err_t remove_peer_info(const uint8_t *mac_addr) {
     if (mac_addr == NULL) {
         return ESP_ERR_ESPNOW_ARG;
     }
-    for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
+    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
         if (memcmp(peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN) == 0) {
             memset(peer_data_table[i].mac_addr, 0xFF, ESP_NOW_ETH_ALEN);
             return ESP_OK;
@@ -260,9 +277,12 @@ void send_ping(const uint8_t *mac_addr) {
 void cleanup_peer_list() {
     if (!comm_task_started) { return; }
 
+    bool peer_list_updated = false;
+
     unsigned long time = millis();
     {
         bool head = true;
+
         esp_now_peer_info_t peer;
         peer_data_t *peer_data;
         while (esp_now_fetch_peer(head, &peer) == ESP_OK) {
@@ -274,6 +294,7 @@ void cleanup_peer_list() {
                     log_d("Removing peer " MACSTR ", last seen %.1fs ago.", MAC2STR(peer.peer_addr), timeSinceLastSeen / 1000.0f);
                     ESP_ERROR_CHECK(esp_now_del_peer(peer.peer_addr));
                     remove_peer_info(peer.peer_addr);
+                    peer_list_updated = true;
                 } else {
                     // log_d("Peer: " MACSTR " last seen %.1fs ago, keeping.", MAC2STR(peer.peer_addr), timeSinceLastSeen / 1000.0f);
                 }
@@ -281,10 +302,11 @@ void cleanup_peer_list() {
         }
     }
 
-    for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
+    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
         /* If the peer must be disabled by now, update */
         if (peer_data_table[i].node_info.current_state == STATE_BUZZER_ACTIVE && (peer_data_table[i].node_info.buzzer_active_remaining_ms + peer_data_table[i].last_seen) < time) {
             peer_data_table[i].node_info.current_state = STATE_IDLE;
+            peer_list_updated                          = true;
         }
     }
 
@@ -292,6 +314,10 @@ void cleanup_peer_list() {
         esp_now_peer_num_t peer_num;
         ESP_ERROR_CHECK(esp_now_get_peer_num(&peer_num));
         log_v("Number of known peers is now: %d", peer_num.total_num - 1);
+    }
+
+    if (peer_list_updated) {
+        bluetooth_notify_peer_list_changed();
     }
 }
 
@@ -302,7 +328,8 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
          mac_addr[0] != 0 ||
          mac_addr[0] != 0 ||
          mac_addr[0] != 0 ||
-         mac_addr[0] != 0)) {
+         mac_addr[0] != 0) &&
+        0 != memcmp(mac_addr, my_mac_addr, ESP_NOW_ETH_ALEN)) {
         /* Don't execute here, but on peer node */
         log_v("Received a command for another peer.");
 
@@ -513,6 +540,8 @@ static void comm_task(void *pvParameter) {
                                     if (node_info->node_type == NODE_TYPE_CONTROLLER) {
                                         time_of_last_keep_alive_communication = time; // When a controller is present -> prevent sleeping
                                     }
+
+                                    bluetooth_notify_peer_list_changed();
                                 }
                                 break;
 
@@ -623,6 +652,8 @@ static void comm_task(void *pvParameter) {
 }
 
 static esp_err_t espnow_init(void) {
+    esp_base_mac_addr_get(my_mac_addr);
+
     s_comm_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(espnow_event_t));
     if (s_comm_queue == NULL) {
         log_e("Create mutex fail");
@@ -630,8 +661,17 @@ static esp_err_t espnow_init(void) {
     }
 
     /* init peer data */
-    for (uint8_t i = 0; i < ESP_NOW_MAX_TOTAL_PEER_NUM; i++) {
+    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
         memset(peer_data_table[i].mac_addr, 0xFF, ESP_NOW_ETH_ALEN);
+    }
+
+    if (!has_external_power) {
+        /* If we're not a controller, the first peer is ourself */
+        memcpy(peer_data_table[0].mac_addr, my_mac_addr, ESP_NOW_ETH_ALEN);
+        peer_data_table[0].latency_us    = 0;
+        peer_data_table[0].rssi          = 0;
+        peer_data_table[0].valid_version = true;
+        update_my_info();
     }
 
     /* Initialize ESPNOW and register sending and receiving callback function. */
