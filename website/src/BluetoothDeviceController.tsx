@@ -109,11 +109,11 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
 
 
     if (!navigator.bluetooth) {
-        return <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">Bluetooth not supported</div>;
+        return <div className="rounded-xl p-5 bg-slate-500 dark:bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">Bluetooth not supported</div>;
     }
 
     return <>
-        <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
+        <div className="rounded-xl p-5 bg-slate-500 dark:bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
             {!device && <Button onPress={selectDevice}>Connect</Button>}
             {device && <Button onPress={() => setDevice(undefined)}>Disconnect</Button>}
         </div >

@@ -204,7 +204,7 @@ function App() {
 
 
   if (!navigator.usb && !navigator.bluetooth) {
-    return <div className='bg-gray-800 '>
+    return <div className='dark:bg-gray-800 px-5'>
       <div className="mx-auto pt-10 container flex flex-col min-h-screen">
         <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
           <div className={classNames("connect-icon h-[5rem] my-[-0.5rem] self-center", "bg-red-900")} />
@@ -215,7 +215,7 @@ function App() {
   }
 
   if (!navigator.usb) {
-    return <div className='bg-gray-800 '>
+    return <div className='dark:bg-gray-800 px-5'>
       <div className="mx-auto pt-10 container flex flex-col min-h-screen">
         <BluetoothDeviceController handleError={handleError} />
       </div>
@@ -223,10 +223,10 @@ function App() {
   }
 
   return (
-    <div className='bg-gray-800 '>
+    <div className='dark:bg-gray-800 px-5'>
       <div className="mx-auto pt-10 container flex flex-col min-h-screen">
 
-        <div className="rounded-xl p-5 bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
+        <div className="rounded-xl p-5 bg-slate-500 dark:bg-slate-900 flex w-full flex-wrap md:flex-nowrap gap-4 items-center mb-10">
           <div onClick={onClick} className={classNames("connect-icon h-[5rem] my-[-0.5rem] self-center transition hover:scale-110", deviceError && "bg-red-600", !deviceError && deviceInfo.isConnected && "bg-green-600")} />
 
           {device && deviceInfo.isConnected && !deviceError && <>

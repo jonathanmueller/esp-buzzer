@@ -365,7 +365,7 @@ export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
 
     const filteredPeers = useMemo(() => peers.filter(peer => !isBroadcastMac(peer.mac_addr) && !isZeroMac(peer.mac_addr)), [peers]);
 
-    return <div className="mt-5 flex gap-5">
+    return <div className="my-5 flex flex-wrap justify-center gap-5">
         {filteredPeers.map((peer, i) => <PeerInfo key={i} sendCommand={sendCommand} peer={peer} handleError={handleError} />)}
         {filteredPeers.length == 0 && <Card className="p-5"><CardBody><Spinner size="lg" color="white" label="Suche..." /></CardBody></Card>}
     </div>;
