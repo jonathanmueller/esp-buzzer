@@ -42,7 +42,7 @@ void led_setup() {
 
     fill_solid(leds, NUM_LEDS, 0);
 
-    xTaskCreate(&led_task, "led_loop", 2000, NULL, 1, NULL);
+    xTaskCreate(&led_task, "led_loop", 2000, NULL, TASK_PRIO_LED, NULL);
 }
 
 void fadeTo(CRGB &rgb, const CRGB &other, uint8_t delta) {

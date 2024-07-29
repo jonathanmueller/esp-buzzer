@@ -4,6 +4,7 @@
 #include "comm.h"
 #include "battery.h"
 #include "nvm.h"
+#include "bluetooth.h"
 
 node_state_t current_state              = STATE_IDLE;
 unsigned long last_state_change         = 0;
@@ -139,6 +140,7 @@ void button_loop() {
         if (debounceBackButtonRelease) {
             if (!pressedBackButtonSinceBoot && lastPushedBackButton && (time - back_button_pressed_since) < 1000) {
                 set_state(STATE_SHOW_BATTERY);
+                bluetooth_set_state(true);
             }
             both_buttons_pressed_for   = 0;
             lastPushedBackButton       = false;

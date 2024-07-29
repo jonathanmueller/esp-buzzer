@@ -30,6 +30,11 @@
 #define SHUTDOWN_TIME_NO_BUZZING_SECONDS   (60 * 20) // 20 minutes without buzzing, even when others are around -> shut down
 #define SHUTDOWN_TIME_NO_COMMS_SECONDS     (60 * 5)  // 5 minutes without another nearby buzzer -> shutdown
 #define DEFAULT_PING_INTERVAL              10000     // Ping interval
+#define BLUETOOTH_AUTO_DISABLE_TIME        30000     // [ms]
+
+// Task priorities
+#define TASK_PRIO_LED                      2
+#define TASK_PRIO_COMM                     3
 
 // Led
 #define NUM_LEDS                           38

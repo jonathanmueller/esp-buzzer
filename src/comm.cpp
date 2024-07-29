@@ -19,11 +19,13 @@
 #include <WiFi.h>
 #include "battery.h"
 #include <map>
-#include "FastLED.h"
 #include "button.h"
 #include <nvm.h>
 #include "custom_usb.h"
 #include "bluetooth.h"
+
+#define FASTLED_INTERNAL
+#include <FastLED.h>
 
 #define ESPNOW_MAXDELAY         512
 #define ESPNOW_QUEUE_SIZE       10
@@ -42,7 +44,11 @@ peer_data_t peer_data_table[PEER_DATA_TABLE_ENTRIES];
 static espnow_data_t s_my_broadcast_info = {
     .type    = ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,
     .payload = {
-        .node_info = { .color = COLOR_RED, .rgb = { 255, 0, 0 }, .current_state = STATE_IDLE } }
+        .node_info = {
+            .version       = VERSION_CODE,
+            .color         = COLOR_RED,
+            .rgb           = { 255, 0, 0 },
+            .current_state = STATE_IDLE } }
 };
 
 unsigned long time_of_last_keep_alive_communication = 0;
@@ -73,8 +79,6 @@ static esp_now_peer_info_t *malloc_peer_info(const uint8_t *mac) {
 
     return peer;
 }
-
-static void espnow_deinit();
 
 typedef enum {
     ESPNOW_SEND_CB,
@@ -333,9 +337,8 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
         /* Don't execute here, but on peer node */
         log_v("Received a command for another peer.");
 
-        espnow_data_t relayed_command = {
-            .type = ESP_DATA_TYPE_COMMAND
-        };
+        espnow_data_t relayed_command;
+        relayed_command.type = ESP_DATA_TYPE_COMMAND;
 
         memcpy(&relayed_command.payload.command, command, len);
 
@@ -523,6 +526,8 @@ static void comm_task(void *pvParameter) {
                                             Keyboard.pressRaw(node_info->key_config.scan_code);
                                             Keyboard.releaseAll();
                                         }
+#else
+                                        (void)peer_previous_state; /* Silence "unused variable" warning */
 #endif
 
                                         if (node_info->buzzer_active_remaining_ms > 0 &&
@@ -691,14 +696,9 @@ static esp_err_t espnow_init(void) {
     ESP_ERROR_CHECK(esp_now_add_peer(peer));
     free(peer);
 
-    xTaskCreate(&comm_task, "comm_task", 2400, NULL, 5, NULL);
+    xTaskCreate(&comm_task, "comm_task", 2400, NULL, TASK_PRIO_COMM, NULL);
 
     return ESP_OK;
-}
-
-static void espnow_deinit() {
-    vSemaphoreDelete(s_comm_queue);
-    esp_now_deinit();
 }
 
 typedef struct

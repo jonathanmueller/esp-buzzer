@@ -8,6 +8,7 @@
 #include <BLE2902.h>
 #include <BLE2904.h>
 
+#define FASTLED_INTERNAL
 #include <FastLED.h>
 
 // Generated using https://www.uuidgenerator.net/
@@ -27,15 +28,6 @@ BLECharacteristic *characteristicVersion;
 BLECharacteristic *characteristicExecCommand;
 BLECharacteristic *characteristicPeerList;
 BLECharacteristic *characteristicBattery;
-
-void bluetooth_loop();
-static void bt_task(void *pvParameter) {
-    while (true) {
-        bluetooth_loop();
-    }
-
-    vTaskDelete(NULL);
-}
 
 void bluetooth_notify_peer_list_changed() {
     if (characteristicPeerList != nullptr) {
@@ -95,10 +87,25 @@ inline BLEDescriptor *formatDescriptor(uint8_t format) {
 }
 
 void bluetooth_init() {
+}
+
+unsigned long bluetooth_last_connected = 0;
+
+BTServerCallbacks btServerCallbacks;
+BTPeerListCallbacks btPeerListCallbacks;
+BTExecCommandCallbacks btExecCommandCallbacks;
+
+void bluetooth_start() {
+    if (BLEDevice::getInitialized()) {
+        return;
+    }
+
+    log_d("Starting bluetooth...");
+
     BLEDevice::init("Buzzer Controller");
 
     btServer = BLEDevice::createServer();
-    btServer->setCallbacks(new BTServerCallbacks());
+    btServer->setCallbacks(&btServerCallbacks);
 
     pService = btServer->createService(UUID_SERVICE);
 
@@ -110,12 +117,12 @@ void bluetooth_init() {
     characteristicExecCommand = pService->createCharacteristic(UUID_CHARACTERISTIC_EXEC_COMMAND, BLECharacteristic::PROPERTY_WRITE);
     characteristicExecCommand->addDescriptor(userDescription("Execute Command"));
     characteristicExecCommand->addDescriptor(formatDescriptor(BLE2904::FORMAT_OPAQUE));
-    characteristicExecCommand->setCallbacks(new BTExecCommandCallbacks());
+    characteristicExecCommand->setCallbacks(&btExecCommandCallbacks);
 
     characteristicPeerList = pService->createCharacteristic(UUID_CHARACTERISTIC_PEER_LIST, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
     characteristicPeerList->addDescriptor(userDescription("Peer List"));
     characteristicPeerList->addDescriptor(formatDescriptor(BLE2904::FORMAT_OPAQUE));
-    characteristicPeerList->setCallbacks(new BTPeerListCallbacks());
+    characteristicPeerList->setCallbacks(&btPeerListCallbacks);
 
     pService->start();
 
@@ -133,17 +140,43 @@ void bluetooth_init() {
     pAdvertising->setMinPreferred(0x12);
 
     BLEDevice::startAdvertising();
+    bluetooth_last_connected = millis();
+}
 
-    xTaskCreate(&bt_task, "bt_task", 2400, NULL, 5, NULL);
+void bluetooth_stop() {
+    if (!BLEDevice::getInitialized()) {
+        return;
+    }
+
+    log_d("Stopping bluetooth...");
+    BLEDevice::stopAdvertising();
+    BLEDevice::deinit();
+    connected_clients = 0;
+}
+
+bool bluetooth_connected() {
+    return connected_clients > 0;
+}
+
+void bluetooth_set_state(bool state) {
+    if (state) {
+        bluetooth_start();
+    } else {
+        bluetooth_stop();
+    }
 }
 
 void bluetooth_loop() {
-    // EVERY_N_SECONDS(10) {
-    //     pCharacteristic->setValue("lalala");
-    //     pCharacteristic->notify();
-    // }
-
-    if (connected_clients > 0) {
+    unsigned long time = millis();
+    if (bluetooth_connected()) {
+        bluetooth_last_connected = time;
         reset_shutdown_timer();
+    }
+
+    if ((time > bluetooth_last_connected) && (time - bluetooth_last_connected) > BLUETOOTH_AUTO_DISABLE_TIME) {
+        if (BLEDevice::getInitialized()) {
+            log_d("Disabling bluetooth due to no connection.");
+            bluetooth_stop();
+        }
     }
 }
