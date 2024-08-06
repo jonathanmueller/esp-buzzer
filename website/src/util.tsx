@@ -1,7 +1,7 @@
 import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
 
-export const EXPECTED_DEVICE_VERSION = 0x12;
+export const EXPECTED_DEVICE_VERSION = 0x13;
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -12,12 +12,34 @@ export function isZeroMac(mac_addr: Uint8Array) {
 }
 
 export enum node_state_t {
-    STATE_IDLE,
-    STATE_DISABLED,
-    STATE_BUZZER_ACTIVE,
+    STATE_DEFAULT,
     STATE_SHUTDOWN,
     STATE_SHOW_BATTERY,
     STATE_CONFIG
+};
+
+export enum command_t {
+    COMMAND_SET_PING_INTERVAL = 0x10,
+    COMMAND_SET_COLOR = 0x20,
+    COMMAND_SET_GAME_CONFIG = 0x21,
+    COMMAND_SET_KEY_CONFIG = 0x22,
+    COMMAND_BUZZ = 0x30,
+    COMMAND_SET_INACTIVE = 0x31,
+    COMMAND_SET_ACTIVE = 0x32,
+    COMMAND_RESET = 0x40,
+    COMMAND_SHUTDOWN = 0x50,
+    COMMAND_SET_MODE = 0x60,
+};
+
+export enum node_mode_t {
+    MODE_DEFAULT = 0,
+    MODE_SIMON_SAYS = 1,
+};
+
+export enum node_state_default_t {
+    MODE_DEFAULT_STATE_IDLE = 0,
+    MODE_DEFAULT_STATE_DISABLED = 1,
+    MODE_DEFAULT_STATE_BUZZER_ACTIVE = 2
 };
 
 export enum key_modifier_t {
@@ -36,6 +58,11 @@ export enum key_modifier_t {
     ALL_GUI = LEFT_GUI | RIGHT_GUI
 };
 
+export enum node_type_t {
+    NODE_TYPE_BUZZER = 0,
+    NODE_TYPE_CONTROLLER = 1,
+}
+
 export const key_config_t = new Struct('key_config_t')
     .UInt8('modifiers')
     .UInt8('scan_code')
@@ -44,13 +71,15 @@ export type key_config_t = ExtractType<typeof key_config_t>;
 
 export const node_info_t = new Struct('node_info_t')
     .UInt8('version')
-    .UInt8('node_type')
+    .UInt8('node_type', typed<node_type_t>())
     .UInt8('battery_percent')
     .UInt32LE('battery_voltage')
     .UInt8('color')
     .UInt8Array('rgb', 3)
     .Struct('key_config', key_config_t)
-    .UInt8('current_state')
+    .UInt8('current_state', typed<node_state_t>())
+    .UInt8('current_mode', typed<node_mode_t>())
+    .UInt8('current_mode_state')
     .UInt32LE('buzzer_active_remaining_ms')
     .compile();
 export type node_info_t = ExtractType<typeof node_info_t>;

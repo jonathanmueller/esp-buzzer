@@ -18,9 +18,11 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
     const { handleError } = props;
     const [device, setDevice] = useState<BluetoothDevice>();
 
+    const [versionCharacteristic, setVersionCharacteristic] = useState<BluetoothRemoteGATTCharacteristic>();
     const [peerListCharacteristic, setPeerListCharacteristic] = useState<BluetoothRemoteGATTCharacteristic>();
     const [execCommandCharacteristic, setExecCommandCharacteristic] = useState<BluetoothRemoteGATTCharacteristic>();
     const [peers, setPeers] = useState<peer_data_t[]>([]);
+    const [deviceVersion, setDeviceVersion] = useState<number>();
     const [readPeerListInterval, setReadPeerListInterval] = useState<number>();
 
     useEffect(() => {
@@ -59,12 +61,26 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
 
             let service = await device.gatt?.getPrimaryService(UUID_SERVICE);
 
+            setVersionCharacteristic(await service?.getCharacteristic(UUID_CHARACTERISTIC_VERSION));
             setPeerListCharacteristic(await service?.getCharacteristic(UUID_CHARACTERISTIC_PEER_LIST));
             setExecCommandCharacteristic(await service?.getCharacteristic(UUID_CHARACTERISTIC_EXEC_COMMAND));
 
             console.log("Connected");
         })();
     }, [device]);
+
+    const readDeviceVersion = useCallback(async () => {
+        if (!versionCharacteristic) { return; }
+
+        versionCharacteristic.readValue().then(data => {
+            console.log("Got updated version");
+            const version = Buffer.from(data.buffer).readUInt8(0);
+            setDeviceVersion(version);
+        }).catch(e => {
+            // console.log(e);
+        });
+
+    }, [versionCharacteristic, setDeviceVersion]);
 
 
 
@@ -84,6 +100,7 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
     useEffect(() => {
         if (!device || !peerListCharacteristic) { return; }
 
+        readDeviceVersion();
         readPeerList();
 
         console.log(peerListCharacteristic);
@@ -100,7 +117,7 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
             setReadPeerListInterval(undefined);
         };
 
-    }, [device, readPeerList, peerListCharacteristic]);
+    }, [device, readPeerList, readDeviceVersion, peerListCharacteristic]);
 
     const sendCommand = useCallback(async (peer: peer_data_t, data: number[]) =>
         await execCommandCharacteristic?.writeValue(new Uint8Array([...peer.mac_addr, ...data]))
@@ -117,7 +134,7 @@ export const BluetoothDeviceController = (props: BluetoothDeviceControllerProps)
             {!device && <Button onPress={selectDevice}>Connect</Button>}
             {device && <Button onPress={() => setDevice(undefined)}>Disconnect</Button>}
         </div >
-        {device && peerListCharacteristic && <DeviceNetworkInfo peers={peers} sendCommand={sendCommand} handleError={handleError} />}
+        {device && peerListCharacteristic && <DeviceNetworkInfo deviceVersion={deviceVersion} peers={peers} sendCommand={sendCommand} handleError={handleError} />}
     </>;
 };
 

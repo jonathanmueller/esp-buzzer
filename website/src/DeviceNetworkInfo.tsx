@@ -4,10 +4,11 @@ import classNames from "classnames";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowClockwise, Command, InfoCircle, Option, Palette, Power, Reception0, Reception1, Reception2, Reception3, Reception4, Shift } from 'react-bootstrap-icons';
 import { CirclePicker } from 'react-color';
-import { DeviceInfo, arr_peer_data_t, isBroadcastMac, isZeroMac, key_config_t, key_modifier_t, node_info_t, node_state_t, peer_data_t } from "./util";
+import { DeviceInfo, EXPECTED_DEVICE_VERSION, arr_peer_data_t, command_t, isBroadcastMac, isZeroMac, key_config_t, key_modifier_t, node_info_t, node_mode_t, node_state_default_t, node_type_t, peer_data_t } from "./util";
 
 
 export type USBDeviceNetworkInfoProps = {
+    deviceVersion: number | undefined,
     deviceInfo: DeviceInfo,
     handleError: (e: any) => void;
 };
@@ -83,22 +84,23 @@ export function PeerInfo(props: PeerInfoProps) {
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [showKeybindPicker, setShowKeybindPicker] = useState(false);
 
-    const buzz = useCallback(() => sendCommand(peer, [0x30]), [sendCommand]);
+    const buzz = useCallback(() => sendCommand(peer, [command_t.COMMAND_BUZZ]), [sendCommand]);
     const [active, _setActive] = useState(peer.node_info.current_state != 1);
     useEffect(() => { if (peer.node_info.current_state != 1) { _setActive(true); } }, [peer.node_info.current_state]);
-    const setActive = useCallback((active: boolean) => { sendCommand(peer, [active ? 0x32 : 0x31]); _setActive(active); }, [sendCommand]);
+    const setActive = useCallback((active: boolean) => { sendCommand(peer, [active ? command_t.COMMAND_SET_ACTIVE : command_t.COMMAND_SET_INACTIVE]); _setActive(active); }, [sendCommand]);
 
     const menuActions = useMemo(() => ({
         "setColor": () => setShowColorPicker(true),
         "setKeyConfig": () => setShowKeybindPicker(true),
-        "reset": () => sendCommand(peer, [0x40]),
-        "shutdown": () => sendCommand(peer, [0x50])
+        "setMode": () => sendCommand(peer, [command_t.COMMAND_SET_MODE]),
+        "reset": () => sendCommand(peer, [command_t.COMMAND_RESET]),
+        "shutdown": () => sendCommand(peer, [command_t.COMMAND_SHUTDOWN])
     }), [sendCommand, setShowKeybindPicker, setShowColorPicker]);
 
     return <>
         <Card className={classNames("transition",
-            peer.node_info.current_state == node_state_t.STATE_BUZZER_ACTIVE && "ring-4 ring-white scale-110 z-10",
-            peer.node_info.current_state == node_state_t.STATE_DISABLED && "opacity-50"
+            peer.node_info.current_mode == node_mode_t.MODE_DEFAULT && peer.node_info.current_mode_state == node_state_default_t.MODE_DEFAULT_STATE_BUZZER_ACTIVE && "ring-4 ring-white scale-110 z-10",
+            peer.node_info.current_mode == node_mode_t.MODE_DEFAULT && peer.node_info.current_mode_state == node_state_default_t.MODE_DEFAULT_STATE_DISABLED && "opacity-50"
         )} style={{ "--color": color } as React.CSSProperties}>
             <CardHeader className="flex gap-3">
                 <Tooltip showArrow content={<span>
@@ -144,17 +146,23 @@ export function PeerInfo(props: PeerInfoProps) {
                         <DropdownItem key="shutdown" className="text-danger" color='danger' startContent={<Power />}>Ausschalten</DropdownItem>
                     </DropdownMenu>
                 </Dropdown>
+
+            </CardFooter>
+            <Divider orientation='horizontal' />
+            <CardFooter className="flex flex-row flex-nowrap gap-3 justify-center py-0">
+                <Button variant="light" className="px-5" isDisabled={!peer.valid_version} onPress={() => sendCommand(peer, [command_t.COMMAND_SET_MODE, node_mode_t.MODE_DEFAULT])}>Standard</Button>
+                <Button variant="light" className="px-5" isDisabled={!peer.valid_version} onPress={() => sendCommand(peer, [command_t.COMMAND_SET_MODE, node_mode_t.MODE_SIMON_SAYS])}>Simon Says</Button>
             </CardFooter>
             <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showColorPicker} onOpenChange={(open) => setShowColorPicker(open)}>
                 <PopoverTrigger><span></span></PopoverTrigger>
                 <PopoverContent className="p-5">
-                    <CirclePicker color={color} onChange={v => sendCommand(peer, [0x20, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
+                    <CirclePicker color={color} onChange={v => sendCommand(peer, [command_t.COMMAND_SET_COLOR, 0xFF, v.rgb.r, v.rgb.g, v.rgb.b])} />
                 </PopoverContent>
             </Popover>
             <Popover className="dark text-foreground " placement="right" backdrop='transparent' isOpen={showKeybindPicker} onOpenChange={(open) => setShowKeybindPicker(open)}>
                 <PopoverTrigger><span></span></PopoverTrigger>
                 <PopoverContent className="p-5">
-                    <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand(peer, [0x22, v.modifiers, v.scan_code])} />
+                    <KeybindPicker keybind={peer.node_info.key_config} onChange={v => sendCommand(peer, [command_t.COMMAND_SET_KEY_CONFIG, v.modifiers, v.scan_code])} />
                 </PopoverContent>
             </Popover>
         </Card>
@@ -305,7 +313,7 @@ function KeybindPicker(props: KeybindPickerProps) {
 }
 
 export function USBDeviceNetworkInfo(props: USBDeviceNetworkInfoProps) {
-    const { deviceInfo, handleError } = props;
+    const { deviceVersion, deviceInfo, handleError } = props;
     const { device } = deviceInfo;
 
     const [peers, setPeers] = useState<peer_data_t[]>([]);
@@ -352,18 +360,35 @@ export function USBDeviceNetworkInfo(props: USBDeviceNetworkInfoProps) {
             .catch(handleError),
         [deviceInfo, handleError]);
 
-    return <DeviceNetworkInfo peers={peers} sendCommand={sendCommand} handleError={handleError} />;
+    return <DeviceNetworkInfo deviceVersion={deviceVersion} peers={peers} sendCommand={sendCommand} handleError={handleError} />;
 }
 
 export type DeviceNetworkInfoProps = {
     peers: peer_data_t[],
+    deviceVersion: number | undefined,
     sendCommand: (peer: peer_data_t, data: number[]) => void,
     handleError: (e: any) => void;
 };
 export function DeviceNetworkInfo(props: DeviceNetworkInfoProps) {
-    const { peers, sendCommand, handleError } = props;
+    const { deviceVersion, peers, sendCommand, handleError } = props;
 
-    const filteredPeers = useMemo(() => peers.filter(peer => !isBroadcastMac(peer.mac_addr) && !isZeroMac(peer.mac_addr)), [peers]);
+    const filteredPeers = useMemo(() => peers.filter(peer =>
+        !isBroadcastMac(peer.mac_addr) &&
+        !isZeroMac(peer.mac_addr) &&
+        (!peer.valid_version || peer.node_info.node_type != node_type_t.NODE_TYPE_CONTROLLER) /* Filter out controllers */
+    ), [peers]);
+
+    const deviceError = useMemo(() => {
+        if (deviceVersion && (deviceVersion !== EXPECTED_DEVICE_VERSION)) {
+            return `Unbekannte Geräteversion ${deviceVersion} (erwartet: ${EXPECTED_DEVICE_VERSION})`;
+        }
+
+        return undefined;
+    }, [deviceVersion]);
+
+    if (deviceError) {
+        return <div className="text-red-600 font-bold text-center my-5">{deviceError}</div>;
+    }
 
     return <div className="my-5 flex flex-wrap justify-center gap-5">
         {filteredPeers.map((peer, i) => <PeerInfo key={i} sendCommand={sendCommand} peer={peer} handleError={handleError} />)}

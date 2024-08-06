@@ -4,7 +4,7 @@ import './App.css';
 import BluetoothDeviceController from './BluetoothDeviceController';
 import { USBDeviceNetworkInfo } from './DeviceNetworkInfo';
 import GameBar from './GameBar';
-import { ConnectedDeviceInfo, EXPECTED_DEVICE_VERSION, INTERFACE_CLASS_CDC, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
+import { ConnectedDeviceInfo, INTERFACE_CLASS_CDC, INTERFACE_CLASS_VENDOR, USB_CODES, UnconnectedDeviceInfo } from './util';
 
 
 function getDeviceInfo(device?: USBDevice): UnconnectedDeviceInfo | ConnectedDeviceInfo {
@@ -194,14 +194,6 @@ function App() {
     };
   }, [device, connectToDevice]);
 
-  const deviceError = useMemo(() => {
-    if (deviceVersion && (deviceVersion !== EXPECTED_DEVICE_VERSION)) {
-      return `Unbekannte Geräteversion ${deviceVersion} (erwartet: ${EXPECTED_DEVICE_VERSION})`;
-    }
-
-    return undefined;
-  }, [deviceVersion]);
-
 
   if (!navigator.usb && !navigator.bluetooth) {
     return <div className='dark:bg-gray-800 px-5'>
@@ -222,6 +214,8 @@ function App() {
     </div>;
   }
 
+  const deviceError = false;
+
   return (
     <div className='dark:bg-gray-800 px-5'>
       <div className="mx-auto pt-10 container flex flex-col min-h-screen">
@@ -233,7 +227,7 @@ function App() {
             <GameBar deviceInfo={deviceInfo} handleError={handleError} />
           </>}
         </div>
-        {deviceError && <div className="text-red-600 font-bold text-center my-5">{deviceError}</div>}
+
         <div className="text-red-600 font-bold text-center my-5">{error?.message ?? '\u00a0'}</div>
 
         {/* <Divider className="my-5" /> */}
@@ -253,9 +247,9 @@ function App() {
         </div>}
 
 
-        {device && deviceInfo.isConnected && !deviceError && <div className="grid grid-cols-12 gap-3 flex-1">
+        {device && deviceInfo.isConnected && <div className="grid grid-cols-12 gap-3 flex-1">
           <div className="flex-1 col-span-12">
-            <USBDeviceNetworkInfo deviceInfo={deviceInfo} handleError={handleError} />
+            <USBDeviceNetworkInfo deviceVersion={deviceVersion} deviceInfo={deviceInfo} handleError={handleError} />
           </div>
 
           {/* <div className="col-span-4 overflow-x-auto h-full">
