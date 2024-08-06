@@ -14,6 +14,7 @@ void nvm_setup() {
             .MAGIC_BYTE  = EEPROM_MAGIC_BYTE,
             .color       = COLOR_ORANGE,
             .rgb         = { 255, 0, 0 },
+            .mode        = MODE_DEFAULT,
             .game_config = {
                 .buzzer_active_time              = BUZZER_ACTIVE_TIME,
                 .deactivation_time_after_buzzing = BUZZER_DISABLED_TIME,

@@ -21,8 +21,8 @@
 #include <map>
 #include "button.h"
 #include <nvm.h>
-#include "custom_usb.h"
 #include "bluetooth.h"
+#include "modes/ModeDefault.h"
 
 #define FASTLED_INTERNAL
 #include <FastLED.h>
@@ -45,10 +45,13 @@ static espnow_data_t s_my_broadcast_info = {
     .type    = ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,
     .payload = {
         .node_info = {
-            .version       = VERSION_CODE,
-            .color         = COLOR_RED,
-            .rgb           = { 255, 0, 0 },
-            .current_state = STATE_IDLE } }
+            .version            = VERSION_CODE,
+            .color              = COLOR_RED,
+            .rgb                = { 255, 0, 0 },
+            .current_state      = STATE_DEFAULT,
+            .current_mode       = MODE_DEFAULT,
+            .current_mode_state = { .node_state_default = MODE_DEFAULT_STATE_IDLE },
+        } }
 };
 
 unsigned long time_of_last_keep_alive_communication = 0;
@@ -164,18 +167,19 @@ void reset_shutdown_timer() {
 void update_my_info() {
     unsigned long time                    = millis();
     s_my_broadcast_info.payload.node_info = {
-        .version                    = VERSION_CODE,
-        .node_type                  = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
-        .battery_percent            = battery_percent_rounded,
-        .battery_voltage            = battery_voltage,
-        .color                      = buzzer_color,
-        .rgb                        = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
-        .key_config                 = nvm_data.key_config,
-        .current_state              = current_state,
-        .buzzer_active_remaining_ms = current_state == STATE_BUZZER_ACTIVE
-                                          ? (time > buzzer_active_until ? 0 : (buzzer_active_until - time))
-                                          : 0,
+        .version            = VERSION_CODE,
+        .node_type          = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
+        .battery_percent    = battery_percent_rounded,
+        .battery_voltage    = battery_voltage,
+        .color              = buzzer_color,
+        .rgb                = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
+        .key_config         = nvm_data.key_config,
+        .current_state      = current_state,
+        .current_mode       = nvm_data.mode,
+        .current_mode_state = get_current_mode()->getState(),
     };
+
+    get_current_mode()->update_my_info(&s_my_broadcast_info.payload.node_info);
     /* If we're not a controller, the first peer is ourself, otherwise, return */
     if (has_external_power) { return; }
 
@@ -186,11 +190,6 @@ void update_my_info() {
 
 void send_state_update() {
     update_my_info();
-
-    if (current_state == STATE_BUZZER_ACTIVE) {
-        /* This is notable! Reset shutdown timer */
-        reset_shutdown_timer();
-    }
 
     esp_err_t ret = esp_now_send(s_broadcast_mac, (const uint8_t *)&s_my_broadcast_info, sizeof(s_my_broadcast_info));
     if (ret == ESP_OK) {
@@ -306,11 +305,13 @@ void cleanup_peer_list() {
         }
     }
 
-    for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
-        /* If the peer must be disabled by now, update */
-        if (peer_data_table[i].node_info.current_state == STATE_BUZZER_ACTIVE && (peer_data_table[i].node_info.buzzer_active_remaining_ms + peer_data_table[i].last_seen) < time) {
-            peer_data_table[i].node_info.current_state = STATE_IDLE;
-            peer_list_updated                          = true;
+    for (uint8_t i = 0; i < node_mode_t::NUM_MODES; i++) {
+        IMode *mode = get_mode((node_mode_t)i);
+        for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
+            /* Give each mode a chance to clean up peer state */
+            if (mode->cleanup_peer_data(&peer_data_table[i])) {
+                peer_list_updated = true;
+            }
         }
     }
 
@@ -404,17 +405,30 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
                 return true;
             }
             break;
+        case COMMAND_SET_MODE:
+            {
+                node_mode_t mode = command->args.mode;
+                if (mode < node_mode_t::NUM_MODES) {
+                    log_d("Changing mode.");
+                    set_mode(mode);
+                    nvm_data.mode = mode;
+                    nvm_save();
+                    send_state_update();
+                } else {
+                    log_e("Received invalid mode %d", mode);
+                }
+                return true;
+            }
+            break;
         case COMMAND_BUZZ:
-            buzz();
+            modeDefault.buzz();
             return true;
         case COMMAND_SET_INACTIVE:
-            current_state         = STATE_DISABLED;
-            buzzer_disabled_until = -1UL;
+            modeDefault.setActive(true);
             send_state_update();
             return true;
         case COMMAND_SET_ACTIVE:
-            current_state         = STATE_IDLE;
-            buzzer_disabled_until = 0;
+            modeDefault.setActive(false);
             send_state_update();
             return true;
         case COMMAND_RESET:
@@ -493,53 +507,18 @@ static void comm_task(void *pvParameter) {
                                     peer_data_t *peer_data;
                                     ESP_ERROR_CHECK(get_or_create_peer_info(recv_cb->mac_addr, &peer_data));
 
-                                    uint8_t peer_previous_state = peer_data->node_info.current_state;
-                                    peer_data->last_seen        = time;
-                                    peer_data->valid_version    = (node_info->version == VERSION_CODE);
+                                    peer_data->last_seen     = time;
+                                    peer_data->valid_version = (node_info->version == VERSION_CODE);
                                     if (peer_data->valid_version) {
+                                        get_current_mode()->onReceiveState(peer_data, node_info);
                                         memcpy(&peer_data->node_info, node_info, sizeof(payload_node_info_t));
                                     } else {
-                                        peer_previous_state = STATE_IDLE;
+                                        log_d("Received message from peer with invalid version (%d)", node_info->version);
                                     }
 
                                     if (notSeenBefore) {
-                                        peer_previous_state = STATE_IDLE;
                                         /* Ping when we first see them */
                                         send_ping(recv_cb->mac_addr);
-                                    }
-
-                                    // Handle state data
-                                    if (current_state != STATE_BUZZER_ACTIVE &&
-                                        node_info->current_state == STATE_BUZZER_ACTIVE) {
-
-#ifdef CONFIG_TINYUSB_ENABLED
-                                        if (peer_previous_state != STATE_BUZZER_ACTIVE) {
-                                            if ((node_info->key_config.modifiers & (1 << 0)) != 0) Keyboard.press(KEY_LEFT_CTRL);
-                                            if ((node_info->key_config.modifiers & (1 << 1)) != 0) Keyboard.press(KEY_LEFT_ALT);
-                                            if ((node_info->key_config.modifiers & (1 << 2)) != 0) Keyboard.press(KEY_LEFT_SHIFT);
-                                            if ((node_info->key_config.modifiers & (1 << 3)) != 0) Keyboard.press(KEY_LEFT_GUI);
-                                            if ((node_info->key_config.modifiers & (1 << 4)) != 0) Keyboard.press(KEY_RIGHT_CTRL);
-                                            if ((node_info->key_config.modifiers & (1 << 5)) != 0) Keyboard.press(KEY_RIGHT_ALT);
-                                            if ((node_info->key_config.modifiers & (1 << 6)) != 0) Keyboard.press(KEY_RIGHT_SHIFT);
-                                            if ((node_info->key_config.modifiers & (1 << 7)) != 0) Keyboard.press(KEY_RIGHT_GUI);
-
-                                            Keyboard.pressRaw(node_info->key_config.scan_code);
-                                            Keyboard.releaseAll();
-                                        }
-#else
-                                        (void)peer_previous_state; /* Silence "unused variable" warning */
-#endif
-
-                                        if (node_info->buzzer_active_remaining_ms > 0 &&
-                                            buzzer_disabled_until < time + node_info->buzzer_active_remaining_ms) {
-                                            time_of_last_keep_alive_communication = time; // This is a notable event -> reset shutdown timer
-
-                                            if (!nvm_data.game_config.can_buzz_while_other_is_active) {
-                                                buzzer_disabled_until = time + node_info->buzzer_active_remaining_ms;
-                                                current_state         = STATE_DISABLED;
-                                                log_d("Received buzz from other node. Disabling for %dms", node_info->buzzer_active_remaining_ms);
-                                            }
-                                        }
                                     }
 
                                     if (node_info->node_type == NODE_TYPE_CONTROLLER) {

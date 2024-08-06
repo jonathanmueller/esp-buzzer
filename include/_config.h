@@ -23,7 +23,7 @@
 #define BUZZER_DISABLED_TIME               3000
 
 // Comm
-#define VERSION_CODE                       0x12      // Increment in case of breaking struct changes in communication
+#define VERSION_CODE                       0x13      // Increment in case of breaking struct changes in communication
 #define SECONDS_TO_REMEMBER_PEERS          30
 #define ACCOUNCEMENT_INTERVAL_SECONDS      10
 #define ACCOUNCEMENT_INTERVAL_WHILE_ACTIVE 200       // [ms]

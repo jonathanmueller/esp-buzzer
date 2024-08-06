@@ -6,34 +6,17 @@
 #include "nvm.h"
 #include "bluetooth.h"
 
-node_state_t current_state              = STATE_IDLE;
-unsigned long last_state_change         = 0;
-unsigned long buzzer_active_until       = 0;
-unsigned long buzzer_disabled_until     = 0;
 unsigned long back_button_pressed_since = 0;
 uint16_t both_buttons_pressed_for       = 0;
 
 bool lastPushedBackButton       = false; /* Whether or not the back button was pushed last loop iteration */
-bool lastPushedBuzzerButton     = false; /* Whether or not the buzzer button was pushed last loop iteration */
 bool pressedBackButtonSinceBoot = false;
 
-void set_state(node_state_t state) {
-    current_state     = state;
-    last_state_change = millis();
-}
-
 void button_setup() {
-    // pinMode(BOOT_BUTTON_PIN, INPUT);
     pinMode(BACK_BUTTON_PIN, INPUT_PULLUP);
     pinMode(BUZZER_BUTTON_PIN, INPUT_PULLUP);
 
-    // pinsBuzzerButtonSinceBoot |= (digitalRead(BUZZER_BUTTON_PIN) == LOW);
-    // pressedBootButtonSinceBoot |= (digitalRead(BOOT_BUTTON_PIN) == LOW);
     pressedBackButtonSinceBoot = (digitalRead(BACK_BUTTON_PIN) == LOW);
-
-    // if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
-    //     lastPushedBuzzerButton = true;
-    // }
 }
 
 inline static void next_color() {
@@ -78,7 +61,7 @@ void config_loop() {
             }
             delay(50);
         } else if (digitalRead(BACK_BUTTON_PIN) == LOW) {
-            set_state(STATE_IDLE);
+            set_state(STATE_DEFAULT);
             break;
         }
         yield();
@@ -90,24 +73,8 @@ void config_loop() {
     nvm_save();
 }
 
-static CEveryNMillis buzzStateUpdate(ACCOUNCEMENT_INTERVAL_WHILE_ACTIVE);
-
-void buzz() {
-    log_i("BUZZ! Sending state update");
-
-    unsigned long time = millis();
-    set_state(STATE_BUZZER_ACTIVE);
-    buzzer_active_until = time + nvm_data.game_config.buzzer_active_time;
-    send_state_update();
-    buzzStateUpdate.reset();
-}
-
 void button_loop() {
     unsigned long time = millis();
-
-    if (current_state == STATE_BUZZER_ACTIVE && buzzStateUpdate) {
-        send_state_update();
-    }
 
     static CEveryNMillis debounceBackButtonRelease(50);
     if (digitalRead(BACK_BUTTON_PIN) == LOW) {
@@ -145,37 +112,6 @@ void button_loop() {
             both_buttons_pressed_for   = 0;
             lastPushedBackButton       = false;
             pressedBackButtonSinceBoot = false;
-        }
-    }
-
-    static CEveryNMillis debounceBuzzerButton(50);
-
-    if (current_state == STATE_BUZZER_ACTIVE && time > buzzer_active_until) {
-        log_d("Time's up! On cooldown for a bit.");
-        set_state(STATE_DISABLED);
-        if (buzzer_disabled_until != -1UL) {
-            buzzer_disabled_until = time + nvm_data.game_config.deactivation_time_after_buzzing;
-        }
-        send_state_update();
-    }
-
-    if (current_state == STATE_DISABLED && time > buzzer_disabled_until) {
-        log_d("Re-enabling.");
-        set_state(STATE_IDLE);
-        send_state_update();
-    }
-
-    if (digitalRead(BUZZER_BUTTON_PIN) == LOW) {
-        if (!lastPushedBuzzerButton || !nvm_data.game_config.must_release_before_pressing) {
-            if (current_state == STATE_IDLE) {
-                buzz();
-            }
-        }
-        lastPushedBuzzerButton = true;
-        debounceBuzzerButton.reset();
-    } else {
-        if (debounceBuzzerButton) {
-            lastPushedBuzzerButton = false;
         }
     }
 }

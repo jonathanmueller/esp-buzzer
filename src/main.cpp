@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_task_wdt.h"
+#include "modes/IMode.h"
 
 static RTC_NOINIT_ATTR uint8_t boot_attempts = 0;
 void check_safe_mode() {
@@ -45,6 +46,7 @@ void setup(void) {
     battery_setup();
     button_setup();
     led_setup();
+    mode_setup();
 
     comm_setup();
 
@@ -59,6 +61,7 @@ void loop() {
     battery_loop();
     button_loop();
     bluetooth_loop();
+    get_current_mode()->loop();
 
     if (boot_attempts > 0 && millis() > 30000) {
         log_d("Boot seems successful.");

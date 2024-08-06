@@ -3,15 +3,6 @@
 #include <Arduino.h>
 #include "_config.h"
 
-enum node_state_t : uint8_t {
-    STATE_IDLE,
-    STATE_DISABLED,
-    STATE_BUZZER_ACTIVE,
-    STATE_SHUTDOWN,
-    STATE_SHOW_BATTERY,
-    STATE_CONFIG
-};
-
 enum led_effect_t : uint8_t {
     EFFECT_NONE,            // Only increase brightness
     EFFECT_FLASH_WHITE,     // Flash with a bright white light
@@ -28,13 +19,5 @@ typedef struct {
     uint16_t crc;                             // CRC-16/GENIBUS of the game config (using esp_rom_crc16_be over all previous bytes)
 } __attribute__((packed)) game_config_t;
 
-extern node_state_t current_state;
-extern unsigned long last_state_change;
-
-extern unsigned long buzzer_active_until;
-extern unsigned long buzzer_disabled_until;
-
 void button_setup();
 void button_loop();
-void set_state(node_state_t state);
-void buzz();

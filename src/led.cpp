@@ -2,6 +2,7 @@
 #include "button.h"
 #include "battery.h"
 #include "nvm.h"
+#include "modes/IMode.h"
 
 CRGB leds[NUM_LEDS];
 color_t buzzer_color  = COLOR_ORANGE;
@@ -57,22 +58,16 @@ void fadeTo(CRGB &rgb, const CRGB &other, uint8_t delta) {
     }
 }
 
-static uint16_t hue                          = 0;
-static uint8_t angle                         = 0;
 static uint8_t number_of_flashes             = 0;
 static unsigned long time_since_state_change = 0;
-static node_state_t last_state               = STATE_IDLE;
+static node_state_t last_state               = STATE_DEFAULT;
+CRGB baseColor;
 
 void led_task(void *param) {
-    CRGB baseColor;
+
     unsigned long time;
     while (true) {
         time = millis();
-
-        // digitalWrite(LED_ENABLE_PIN, (time % 4000) < 2000);
-
-        angle += 1;
-        hue   += 1;
 
         if (buzzer_color == COLOR_RGB) {
             baseColor = buzzer_color_rgb;
@@ -91,49 +86,18 @@ void led_task(void *param) {
         } else {
 
             switch (current_state) {
-                case STATE_IDLE:
-                    {
-                        fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_IDLE));
-                    }
+                case STATE_DEFAULT:
+                    get_current_mode()->display();
                     break;
                 case STATE_CONFIG:
                     fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(buzzer_color == COLOR_RGB && digitalRead(BUZZER_BUTTON_PIN) == LOW ? 255 : sin8(millis() / 2) / 6 + 40));
                     break;
                 case STATE_SHUTDOWN:
                     {
-                        fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_IDLE));
+                        get_current_mode()->display();
+
                         uint8_t leds_to_shutoff = ((float)time_since_state_change / SHUTDOWN_ANIMATION_DURATION) * NUM_LEDS;
                         fill_solid(&leds[(NUM_LEDS - leds_to_shutoff) / 2], leds_to_shutoff, 0);
-                    }
-                    break;
-                case STATE_DISABLED:
-                    fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_DISABLED));
-                    break;
-                case STATE_BUZZER_ACTIVE:
-                    uint8_t scale;
-                    for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                        leds[i] = baseColor;
-                        scale   = sin8((int16_t)(((int16_t)(ACTIVE_EFFECT_SPEED * angle) - ACTIVE_EFFECT_NUM_WAVES * (abs((int16_t)i - (NUM_LEDS / 2))) * 255.0f / NUM_LEDS)));
-                        scale   = scale < 50 ? 0 : (scale - 50) * (255.0 / (255.0 - 50));
-                        scale   = scale < 1 ? 1 : scale;
-                        leds[i].nscale8_video(scale);
-                    }
-
-                    if (
-                        (nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ||
-                         nvm_data.game_config.buzz_effect == EFFECT_FLASH_WHITE) &&
-                        time_since_state_change < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
-                        CRGB flashColor = nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ? baseColor : CRGB::White;
-
-                        fract8 fract;
-                        if (time_since_state_change < (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
-                            fract = 255 - (uint8_t)(255.0f * (time_since_state_change) / FLASH_EFFECT_PRE_FLASH_DURATION);
-                        } else {
-                            fract = 255 - (255.0f * (time_since_state_change - (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) / FLASH_EFFECT_DURATION);
-                        }
-                        for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                            leds[i] = leds[i].lerp8(flashColor, fract);
-                        }
                     }
                     break;
                 case STATE_SHOW_BATTERY:
@@ -144,7 +108,7 @@ void led_task(void *param) {
                     }
 
                     if (time_since_state_change > 2000) {
-                        set_state(STATE_IDLE);
+                        set_state(STATE_DEFAULT);
                     }
                     break;
             }

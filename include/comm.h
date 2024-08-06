@@ -2,6 +2,7 @@
 #pragma once
 
 #include "button.h"
+#include "mode.h"
 #include "esp_now.h"
 #include "led.h"
 #include "_config.h"
@@ -76,6 +77,8 @@ typedef struct {
     uint8_t rgb[3];
     key_config_t key_config;
     node_state_t current_state;
+    node_mode_t current_mode;
+    node_mode_state_t current_mode_state;
     uint32_t buzzer_active_remaining_ms;
 } __attribute__((packed)) payload_node_info_t;
 
@@ -89,7 +92,10 @@ typedef struct {
     payload_node_info_t node_info;      // The peer's last known node info (i.e. state)
 } __attribute__((packed)) peer_data_t;
 
-#define ESP_NOTIFY_MTU          514
+#define ESP_NOTIFY_MTU 514
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 #define PEER_DATA_TABLE_ENTRIES (MIN(ESP_NOW_MAX_TOTAL_PEER_NUM, (MIN(ESP_NOTIFY_MTU, ESP_GATT_MAX_ATTR_LEN) / sizeof(peer_data_t))))
 extern peer_data_t peer_data_table[PEER_DATA_TABLE_ENTRIES];
 extern uint8_t my_mac_addr[ESP_NOW_ETH_ALEN];
@@ -117,6 +123,7 @@ enum command_t : uint8_t {
     COMMAND_SET_ACTIVE        = 0x32,
     COMMAND_RESET             = 0x40,
     COMMAND_SHUTDOWN          = 0x50,
+    COMMAND_SET_MODE          = 0x60,
 };
 
 typedef struct {
@@ -128,6 +135,7 @@ typedef struct {
         } __attribute__((packed)) set_color;
         game_config_t game_config;
         key_config_t key_config;
+        node_mode_t mode;
         uint8_t raw[0];
     } __attribute__((packed)) args;
 } __attribute__((packed)) payload_command_t;

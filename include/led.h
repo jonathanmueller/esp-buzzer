@@ -20,6 +20,7 @@ enum color_t : uint8_t {
 extern color_t buzzer_color;
 extern CRGB buzzer_color_rgb;
 extern CRGB colors[];
+extern CRGB baseColor;
 
 extern CRGB leds[NUM_LEDS];
 
