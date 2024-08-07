@@ -167,16 +167,17 @@ void reset_shutdown_timer() {
 void update_my_info() {
     unsigned long time                    = millis();
     s_my_broadcast_info.payload.node_info = {
-        .version            = VERSION_CODE,
-        .node_type          = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
-        .battery_percent    = battery_percent_rounded,
-        .battery_voltage    = battery_voltage,
-        .color              = buzzer_color,
-        .rgb                = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
-        .key_config         = nvm_data.key_config,
-        .current_state      = current_state,
-        .current_mode       = nvm_data.mode,
-        .current_mode_state = get_current_mode()->getState(),
+        .version                    = VERSION_CODE,
+        .node_type                  = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
+        .battery_percent            = battery_percent_rounded,
+        .battery_voltage            = battery_voltage,
+        .color                      = buzzer_color,
+        .rgb                        = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
+        .key_config                 = nvm_data.key_config,
+        .current_state              = current_state,
+        .current_mode               = nvm_data.mode,
+        .current_mode_state         = get_current_mode()->getState(),
+        .buzzer_active_remaining_ms = s_my_broadcast_info.payload.node_info.buzzer_active_remaining_ms,
     };
 
     get_current_mode()->update_my_info(&s_my_broadcast_info.payload.node_info);
@@ -421,14 +422,14 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
             }
             break;
         case COMMAND_BUZZ:
-            modeDefault.buzz();
+            modeDefault->buzz();
             return true;
         case COMMAND_SET_INACTIVE:
-            modeDefault.setActive(true);
+            modeDefault->setActive(true);
             send_state_update();
             return true;
         case COMMAND_SET_ACTIVE:
-            modeDefault.setActive(false);
+            modeDefault->setActive(false);
             send_state_update();
             return true;
         case COMMAND_RESET:

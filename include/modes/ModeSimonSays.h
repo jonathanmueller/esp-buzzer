@@ -14,4 +14,4 @@ class ModeSimonSays : public IMode {
     void display();
 };
 
-extern ModeSimonSays modeSimonSays;
+extern ModeSimonSays *modeSimonSays;

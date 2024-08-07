@@ -1,9 +1,19 @@
 #include "modes/IMode.h"
 #include "nvm.h"
 
-static IMode *modes[node_mode_t::NUM_MODES];
-IMode *get_mode(node_mode_t mode) { return modes[mode]; }
-IMode *get_current_mode() { return modes[nvm_data.mode]; }
+static IMode *modes[node_mode_t::NUM_MODES] = { 0 };
+IMode *get_mode(node_mode_t modeIdx) {
+    IMode *mode = modes[modeIdx];
+    if (mode == nullptr) {
+        log_e("Mode %d not initialized", mode);
+    }
+    return mode;
+}
+
+IMode *get_current_mode() {
+    return get_mode(nvm_data.mode);
+}
+
 void set_mode(node_mode_t mode) {
     if (nvm_data.mode != mode && mode < node_mode_t::NUM_MODES) {
         nvm_data.mode     = mode;

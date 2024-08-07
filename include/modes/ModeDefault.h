@@ -20,4 +20,4 @@ class ModeDefault : public IMode {
     bool cleanup_peer_data(peer_data_t *peer_data);
 };
 
-extern ModeDefault modeDefault;
+extern ModeDefault *modeDefault;

@@ -4,7 +4,7 @@
 
 class IMode {
   protected:
-    node_mode_state_t state;
+    node_mode_state_t state         = { .raw = 0 };
     unsigned long last_state_change = 0;
     void _setState(node_mode_state_t state);
 

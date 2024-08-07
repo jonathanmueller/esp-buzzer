@@ -58,7 +58,6 @@ void fadeTo(CRGB &rgb, const CRGB &other, uint8_t delta) {
     }
 }
 
-static uint8_t number_of_flashes             = 0;
 static unsigned long time_since_state_change = 0;
 static node_state_t last_state               = STATE_DEFAULT;
 CRGB baseColor;

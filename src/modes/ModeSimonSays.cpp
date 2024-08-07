@@ -27,4 +27,4 @@ void ModeSimonSays::display() {
     fill_solid(leds, NUM_LEDS, simonSaysColors[simonSaysColorIndex].scale8(64));
 }
 
-ModeSimonSays modeSimonSays;
+ModeSimonSays *modeSimonSays = new ModeSimonSays();

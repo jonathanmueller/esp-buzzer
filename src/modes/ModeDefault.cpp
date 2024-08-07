@@ -66,32 +66,34 @@ void ModeDefault::display() {
             fill_solid(leds, NUM_LEDS, baseColor.nscale8_video(BRIGHTNESS_DISABLED));
             break;
         case MODE_DEFAULT_STATE_BUZZER_ACTIVE:
-            uint8_t scale;
-            uint8_t angle = (millis() / 10) % 256;
-            for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                leds[i] = baseColor;
-                scale   = sin8((int16_t)(((int16_t)(ACTIVE_EFFECT_SPEED * angle) - ACTIVE_EFFECT_NUM_WAVES * (abs((int16_t)i - (NUM_LEDS / 2))) * 255.0f / NUM_LEDS)));
-                scale   = scale < 50 ? 0 : (scale - 50) * (255.0 / (255.0 - 50));
-                scale   = scale < 1 ? 1 : scale;
-                leds[i].nscale8_video(scale);
-            }
-
-            unsigned long time_since_state_change = this->getTimeSinceLastStateChange();
-
-            if (
-                (nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ||
-                 nvm_data.game_config.buzz_effect == EFFECT_FLASH_WHITE) &&
-                time_since_state_change < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
-                CRGB flashColor = nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ? baseColor : CRGB::White;
-
-                fract8 fract;
-                if (time_since_state_change < (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
-                    fract = 255 - (uint8_t)(255.0f * (time_since_state_change) / FLASH_EFFECT_PRE_FLASH_DURATION);
-                } else {
-                    fract = 255 - (255.0f * (time_since_state_change - (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) / FLASH_EFFECT_DURATION);
-                }
+            {
+                uint8_t scale;
+                uint8_t angle = (millis() / 10) % 256;
                 for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                    leds[i] = leds[i].lerp8(flashColor, fract);
+                    leds[i] = baseColor;
+                    scale   = sin8((int16_t)(((int16_t)(ACTIVE_EFFECT_SPEED * angle) - ACTIVE_EFFECT_NUM_WAVES * (abs((int16_t)i - (NUM_LEDS / 2))) * 255.0f / NUM_LEDS)));
+                    scale   = scale < 50 ? 0 : (scale - 50) * (255.0 / (255.0 - 50));
+                    scale   = scale < 1 ? 1 : scale;
+                    leds[i].nscale8_video(scale);
+                }
+
+                unsigned long time_since_state_change = this->getTimeSinceLastStateChange();
+
+                if (
+                    (nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ||
+                     nvm_data.game_config.buzz_effect == EFFECT_FLASH_WHITE) &&
+                    time_since_state_change < FLASH_EFFECT_DURATION + (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
+                    CRGB flashColor = nvm_data.game_config.buzz_effect == EFFECT_FLASH_BASE_COLOR ? baseColor : CRGB::White;
+
+                    fract8 fract;
+                    if (time_since_state_change < (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) {
+                        fract = 255 - (uint8_t)(255.0f * (time_since_state_change) / FLASH_EFFECT_PRE_FLASH_DURATION);
+                    } else {
+                        fract = 255 - (255.0f * (time_since_state_change - (FLASH_EFFECT_PRE_FLASH_COUNT * FLASH_EFFECT_PRE_FLASH_DURATION)) / FLASH_EFFECT_DURATION);
+                    }
+                    for (uint8_t i = 0; i < NUM_LEDS; i++) {
+                        leds[i] = leds[i].lerp8(flashColor, fract);
+                    }
                 }
             }
             break;
@@ -165,13 +167,11 @@ void ModeDefault::loop() {
     }
 }
 
-ModeDefault modeDefault;
-
 void ModeDefault::buzz() {
     log_i("BUZZ! Sending state update");
 
     unsigned long time = millis();
-    modeDefault.setState(MODE_DEFAULT_STATE_BUZZER_ACTIVE);
+    this->setState(MODE_DEFAULT_STATE_BUZZER_ACTIVE);
     this->buzzer_active_until = time + nvm_data.game_config.buzzer_active_time;
     send_state_update();
     buzzStateUpdate.reset();
@@ -179,3 +179,5 @@ void ModeDefault::buzz() {
     /* This is notable! Reset shutdown timer */
     reset_shutdown_timer();
 }
+
+ModeDefault *modeDefault = new ModeDefault();
