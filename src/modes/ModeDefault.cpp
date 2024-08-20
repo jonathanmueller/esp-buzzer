@@ -40,21 +40,18 @@ void ModeDefault::onReceiveState(peer_data_t *previous_state, payload_node_info_
         (void)peer_previous_state; /* Silence "unused variable" warning */
 #endif
 
-        if (received_state->buzzer_active_remaining_ms > 0 &&
-            this->buzzer_disabled_until < time + received_state->buzzer_active_remaining_ms) {
+        if (received_state->mode_specific_state.mode_default.buzzer_active_remaining_ms > 0 &&
+            this->buzzer_disabled_until < time + received_state->mode_specific_state.mode_default.buzzer_active_remaining_ms) {
             reset_shutdown_timer();
             // time_of_last_keep_alive_communication = time; // This is a notable event -> reset shutdown timer
 
             if (!nvm_data.game_config.can_buzz_while_other_is_active) {
-                this->buzzer_disabled_until = time + received_state->buzzer_active_remaining_ms;
+                this->buzzer_disabled_until = time + received_state->mode_specific_state.mode_default.buzzer_active_remaining_ms;
                 this->setState(MODE_DEFAULT_STATE_DISABLED);
-                log_d("Received buzz from other node. Disabling for %dms", received_state->buzzer_active_remaining_ms);
+                log_d("Received buzz from other node. Disabling for %dms", received_state->mode_specific_state.mode_default.buzzer_active_remaining_ms);
             }
         }
     }
-}
-
-void ModeDefault::setup() {
 }
 
 void ModeDefault::display() {
@@ -104,18 +101,18 @@ bool ModeDefault::cleanup_peer_data(peer_data_t *peer_data) {
     /* If the peer must be disabled by now, update */
     if (peer_data->node_info.current_mode == MODE_DEFAULT &&
         peer_data->node_info.current_mode_state.node_state_default == MODE_DEFAULT_STATE_BUZZER_ACTIVE &&
-        (peer_data->node_info.buzzer_active_remaining_ms + peer_data->last_seen) < millis()) {
+        (peer_data->node_info.mode_specific_state.mode_default.buzzer_active_remaining_ms + peer_data->last_seen) < millis()) {
         peer_data->node_info.current_mode_state.node_state_default = MODE_DEFAULT_STATE_IDLE;
         return true;
     }
     return false;
 }
 
-void ModeDefault::update_my_info(payload_node_info_t *node_info) {
-    unsigned long time                    = millis();
-    node_info->buzzer_active_remaining_ms = this->getState<node_state_default_t>() == MODE_DEFAULT_STATE_BUZZER_ACTIVE
-                                                ? (time > this->buzzer_active_until ? 0 : (this->buzzer_active_until - time))
-                                                : 0;
+void ModeDefault::update_mode_specific_state(mode_specific_state_t *mode_state) {
+    unsigned long time                                  = millis();
+    mode_state->mode_default.buzzer_active_remaining_ms = this->getState<node_state_default_t>() == MODE_DEFAULT_STATE_BUZZER_ACTIVE
+                                                              ? (time > this->buzzer_active_until ? 0 : (this->buzzer_active_until - time))
+                                                              : 0;
 }
 
 void ModeDefault::setActive(bool active) {

@@ -1,7 +1,7 @@
 import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
 
-export const EXPECTED_DEVICE_VERSION = 0x13;
+export const EXPECTED_DEVICE_VERSION = 0x14;
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -69,6 +69,22 @@ export const key_config_t = new Struct('key_config_t')
     .compile();
 export type key_config_t = ExtractType<typeof key_config_t>;
 
+export const mode_default_specific_state_t = new Struct('mode_default_specific_state_t')
+    .UInt32LE('buzzer_active_remaining_ms')
+    .compile();
+export type mode_default_specific_state_t = ExtractType<typeof mode_default_specific_state_t>;
+
+export const mode_simon_says_specific_state_t = new Struct('mode_simon_says_specific_state_t')
+    .UInt8('seed')
+    .compile();
+export type mode_simon_says_specific_state_t = ExtractType<typeof mode_simon_says_specific_state_t>;
+
+export const mode_specific_state_t = new Struct('mode_specific_state_t')
+    .Struct('mode_default_specific_state_t', mode_default_specific_state_t)
+    .Struct('mode_simon_says_specific_state_t', mode_simon_says_specific_state_t)
+    .compile();
+export type mode_specific_state_t = ExtractType<typeof mode_specific_state_t>;
+
 export const node_info_t = new Struct('node_info_t')
     .UInt8('version')
     .UInt8('node_type', typed<node_type_t>())
@@ -80,7 +96,7 @@ export const node_info_t = new Struct('node_info_t')
     .UInt8('current_state', typed<node_state_t>())
     .UInt8('current_mode', typed<node_mode_t>())
     .UInt8('current_mode_state')
-    .UInt32LE('buzzer_active_remaining_ms')
+    .Struct('mode_specific_state', mode_specific_state_t)
     .compile();
 export type node_info_t = ExtractType<typeof node_info_t>;
 

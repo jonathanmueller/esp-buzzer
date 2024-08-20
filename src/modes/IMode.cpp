@@ -16,11 +16,15 @@ IMode *get_current_mode() {
 
 void set_mode(node_mode_t mode) {
     if (nvm_data.mode != mode && mode < node_mode_t::NUM_MODES) {
+        log_d("Changing mode to %d.", mode);
+
         nvm_data.mode     = mode;
         last_state_change = millis();
 
         get_current_mode()->setup();
         nvm_save();
+
+        send_state_update();
     }
 }
 

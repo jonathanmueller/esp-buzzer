@@ -10,8 +10,7 @@ class ModeDefault : public IMode {
     ModeDefault();
     ~ModeDefault() {};
 
-    void setup();
-    void update_my_info(payload_node_info_t *node_info);
+    void update_mode_specific_state(mode_specific_state_t *mode_state);
     void onReceiveState(peer_data_t *previous_state, payload_node_info_t *received_state);
     void loop();
     void display();

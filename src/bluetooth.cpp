@@ -152,6 +152,14 @@ void bluetooth_stop() {
     BLEDevice::stopAdvertising();
     BLEDevice::deinit();
     connected_clients = 0;
+
+    characteristicPeerList    = nullptr;
+    characteristicExecCommand = nullptr;
+    characteristicVersion     = nullptr;
+    characteristicBattery     = nullptr;
+    pAdvertising              = nullptr;
+    pService                  = nullptr;
+    btServer                  = nullptr;
 }
 
 bool bluetooth_connected() {

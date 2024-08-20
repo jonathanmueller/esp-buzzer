@@ -33,9 +33,9 @@
 
 static QueueHandle_t s_comm_queue;
 
-uint8_t comm_task_started                 = false;
-uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-uint8_t my_mac_addr[ESP_NOW_ETH_ALEN]     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+uint8_t comm_task_started  = false;
+mac_addr_t s_broadcast_mac = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+mac_addr_t my_mac_addr     = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 uint16_t pingInterval = DEFAULT_PING_INTERVAL;
 
@@ -45,13 +45,18 @@ static espnow_data_t s_my_broadcast_info = {
     .type    = ESP_DATA_TYPE_JOIN_ANNOUNCEMENT,
     .payload = {
         .node_info = {
-            .version            = VERSION_CODE,
-            .color              = COLOR_RED,
-            .rgb                = { 255, 0, 0 },
-            .current_state      = STATE_DEFAULT,
-            .current_mode       = MODE_DEFAULT,
-            .current_mode_state = { .node_state_default = MODE_DEFAULT_STATE_IDLE },
-        } }
+            .version             = VERSION_CODE,
+            .color               = COLOR_RED,
+            .rgb                 = { 255, 0, 0 },
+            .current_state       = STATE_DEFAULT,
+            .current_mode        = MODE_DEFAULT,
+            .current_mode_state  = { .raw = 0 },
+            .mode_specific_state = {
+                .mode_default    = {},
+                .mode_simon_says = {},
+            },
+        },
+    }
 };
 
 unsigned long time_of_last_keep_alive_communication = 0;
@@ -89,12 +94,12 @@ typedef enum {
 } espnow_event_id_t;
 
 typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
+    mac_addr_t mac_addr;
     esp_now_send_status_t status;
 } espnow_event_send_cb_t;
 
 typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN];
+    mac_addr_t mac_addr;
     uint8_t *data;
     int data_len;
 } espnow_event_recv_cb_t;
@@ -165,22 +170,22 @@ void reset_shutdown_timer() {
 }
 
 void update_my_info() {
-    unsigned long time                    = millis();
+    unsigned long time = millis();
+
     s_my_broadcast_info.payload.node_info = {
-        .version                    = VERSION_CODE,
-        .node_type                  = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
-        .battery_percent            = battery_percent_rounded,
-        .battery_voltage            = battery_voltage,
-        .color                      = buzzer_color,
-        .rgb                        = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
-        .key_config                 = nvm_data.key_config,
-        .current_state              = current_state,
-        .current_mode               = nvm_data.mode,
-        .current_mode_state         = get_current_mode()->getState(),
-        .buzzer_active_remaining_ms = s_my_broadcast_info.payload.node_info.buzzer_active_remaining_ms,
+        .version            = VERSION_CODE,
+        .node_type          = has_external_power ? NODE_TYPE_CONTROLLER : NODE_TYPE_BUZZER,
+        .battery_percent    = battery_percent_rounded,
+        .battery_voltage    = battery_voltage,
+        .color              = buzzer_color,
+        .rgb                = { buzzer_color_rgb.r, buzzer_color_rgb.g, buzzer_color_rgb.b },
+        .key_config         = nvm_data.key_config,
+        .current_state      = current_state,
+        .current_mode       = nvm_data.mode,
+        .current_mode_state = get_current_mode()->getState(),
     };
 
-    get_current_mode()->update_my_info(&s_my_broadcast_info.payload.node_info);
+    get_current_mode()->update_mode_specific_state(&s_my_broadcast_info.payload.node_info.mode_specific_state);
     /* If we're not a controller, the first peer is ourself, otherwise, return */
     if (has_external_power) { return; }
 
@@ -200,7 +205,7 @@ void send_state_update() {
     }
 }
 
-static esp_err_t get_peer_info(const uint8_t *mac_addr, peer_data_t **data) {
+esp_err_t get_peer_info(const uint8_t *mac_addr, peer_data_t **data) {
     if (mac_addr == NULL || data == NULL) {
         return ESP_ERR_ESPNOW_ARG;
     }
@@ -410,11 +415,7 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
             {
                 node_mode_t mode = command->args.mode;
                 if (mode < node_mode_t::NUM_MODES) {
-                    log_d("Changing mode.");
                     set_mode(mode);
-                    nvm_data.mode = mode;
-                    nvm_save();
-                    send_state_update();
                 } else {
                     log_e("Received invalid mode %d", mode);
                 }

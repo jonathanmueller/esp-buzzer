@@ -69,6 +69,15 @@ typedef struct {
 } __attribute__((packed)) key_config_t;
 
 typedef struct {
+    struct {
+        uint32_t buzzer_active_remaining_ms;
+    } __attribute__((packed)) mode_default;
+    struct {
+        uint8_t seed;
+    } __attribute__((packed)) mode_simon_says;
+} __attribute__((packed)) mode_specific_state_t;
+
+typedef struct {
     uint8_t version; /* Must match CONFIG_VERSION */
     node_type_t node_type;
     uint8_t battery_percent;
@@ -79,17 +88,19 @@ typedef struct {
     node_state_t current_state;
     node_mode_t current_mode;
     node_mode_state_t current_mode_state;
-    uint32_t buzzer_active_remaining_ms;
+    mode_specific_state_t mode_specific_state;
 } __attribute__((packed)) payload_node_info_t;
 
+typedef uint8_t mac_addr_t[ESP_NOW_ETH_ALEN];
+
 typedef struct {
-    uint8_t mac_addr[ESP_NOW_ETH_ALEN]; // The peer's MAC address
-    unsigned long last_seen;            // The last millis() that we received a (non-ping) packet from this peer
-    unsigned long last_sent_ping_us;    // Last micros() that we sent a ping to this peer
-    uint16_t latency_us;                // The RTT latency in us
-    int8_t rssi;                        // The RSSI
-    boolean valid_version;              // Whether or not the peer has a valid version (i.e. communication is possible)
-    payload_node_info_t node_info;      // The peer's last known node info (i.e. state)
+    mac_addr_t mac_addr;             // The peer's MAC address
+    unsigned long last_seen;         // The last millis() that we received a (non-ping) packet from this peer
+    unsigned long last_sent_ping_us; // Last micros() that we sent a ping to this peer
+    uint16_t latency_us;             // The RTT latency in us
+    int8_t rssi;                     // The RSSI
+    boolean valid_version;           // Whether or not the peer has a valid version (i.e. communication is possible)
+    payload_node_info_t node_info;   // The peer's last known node info (i.e. state)
 } __attribute__((packed)) peer_data_t;
 
 #define ESP_NOTIFY_MTU 514
@@ -98,7 +109,7 @@ typedef struct {
 #endif
 #define PEER_DATA_TABLE_ENTRIES (MIN(ESP_NOW_MAX_TOTAL_PEER_NUM, (MIN(ESP_NOTIFY_MTU, ESP_GATT_MAX_ATTR_LEN) / sizeof(peer_data_t))))
 extern peer_data_t peer_data_table[PEER_DATA_TABLE_ENTRIES];
-extern uint8_t my_mac_addr[ESP_NOW_ETH_ALEN];
+extern mac_addr_t my_mac_addr;
 
 enum ping_pong_stage_t : uint8_t {
     PING_PONG_STAGE_PING,
@@ -157,6 +168,7 @@ typedef struct {
 extern "C" {
 #endif
 
+esp_err_t get_peer_info(const uint8_t *mac_addr, peer_data_t **data);
 void cleanup_peer_list();
 void comm_setup();
 void update_my_info();

@@ -25,3 +25,5 @@ extern CRGB baseColor;
 extern CRGB leds[NUM_LEDS];
 
 void led_setup();
+
+CRGB get_effective_color(color_t color, uint8_t rgb[3]);

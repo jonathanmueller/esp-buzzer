@@ -62,17 +62,20 @@ static unsigned long time_since_state_change = 0;
 static node_state_t last_state               = STATE_DEFAULT;
 CRGB baseColor;
 
+CRGB get_effective_color(color_t color, uint8_t rgb[3]) {
+    if (color == COLOR_RGB) {
+        return CRGB(rgb[0], rgb[1], rgb[2]);
+    } else {
+        return colors[color];
+    }
+}
 void led_task(void *param) {
 
     unsigned long time;
     while (true) {
         time = millis();
 
-        if (buzzer_color == COLOR_RGB) {
-            baseColor = buzzer_color_rgb;
-        } else {
-            baseColor = colors[buzzer_color];
-        }
+        baseColor = get_effective_color(buzzer_color, buzzer_color_rgb.raw);
 
         if (current_state != last_state) {
             last_state_change = time;

@@ -22,7 +22,11 @@ typedef enum : uint8_t {
 } node_state_default_t;
 
 typedef enum : uint8_t {
-    MODE_SIMON_SAYS_IDLE
+    MODE_SIMON_SAYS_STATE_IDLE,
+    MODE_SIMON_SAYS_STATE_NEGOTIATING,
+    MODE_SIMON_SAYS_STATE_PLAYING_SEQUENCE,
+    MODE_SIMON_SAYS_STATE_WAITING_FOR_PLAYER,
+    MODE_SIMON_SAYS_STATE_SHOWING_RESULT
 } node_state_simon_says_t;
 
 typedef union {
