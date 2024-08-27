@@ -14,5 +14,5 @@ void mode_setup() {
         nvm_data.mode = node_mode_t::MODE_DEFAULT;
     }
 
-    set_mode(nvm_data.mode);
+    set_mode(nvm_data.mode, true);
 }

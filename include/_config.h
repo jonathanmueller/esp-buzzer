@@ -22,8 +22,14 @@
 #define BUZZER_ACTIVE_TIME                 5000
 #define BUZZER_DISABLED_TIME               3000
 
+// Simon Says
+#define SIMON_SAYS_INITIAL_DELAY           1000
+#define SIMON_SAYS_LIGHTUP_DURATION        400
+#define SIMON_SAYS_PAUSE_DURATION          200
+#define SIMON_SAYS_RESULT_DURATION         1000
+
 // Comm
-#define VERSION_CODE                       0x14      // Increment in case of breaking struct changes in communication
+#define VERSION_CODE                       0x15      // Increment in case of breaking struct changes in communication
 #define SECONDS_TO_REMEMBER_PEERS          30
 #define ACCOUNCEMENT_INTERVAL_SECONDS      10
 #define ACCOUNCEMENT_INTERVAL_WHILE_ACTIVE 200       // [ms]

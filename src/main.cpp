@@ -46,9 +46,9 @@ void setup(void) {
     battery_setup();
     button_setup();
     led_setup();
-    mode_setup();
-
     comm_setup();
+
+    mode_setup();
 
     bluetooth_init();
 }
@@ -62,6 +62,7 @@ void loop() {
     button_loop();
     bluetooth_loop();
     get_current_mode()->loop();
+    send_scheduled_state_update();
 
     if (boot_attempts > 0 && millis() > 30000) {
         log_d("Boot seems successful.");

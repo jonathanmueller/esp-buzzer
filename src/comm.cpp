@@ -199,9 +199,21 @@ void send_state_update() {
 
     esp_err_t ret = esp_now_send(s_broadcast_mac, (const uint8_t *)&s_my_broadcast_info, sizeof(s_my_broadcast_info));
     if (ret == ESP_OK) {
-        log_d("Broadcasting node information.");
+        log_v("Broadcasting node information.");
     } else {
         log_e("Send error: %s", esp_err_to_name(ret));
+    }
+}
+
+static bool scheduled_state_update = false;
+void schedule_state_update() {
+    scheduled_state_update = true;
+}
+
+void send_scheduled_state_update() {
+    if (scheduled_state_update) {
+        scheduled_state_update = false;
+        send_state_update();
     }
 }
 
@@ -492,9 +504,9 @@ static void comm_task(void *pvParameter) {
                                     time_of_last_seen_peer = time;
 
                                     payload_node_info_t *node_info = &data->payload.node_info;
-                                    log_v("Task Stack High Water Mark: %d", uxTaskGetStackHighWaterMark(NULL));
 
-                                    log_d("Received node state from " MACSTR ": type=%d, color=%d, currentState=%d, battery=%dmV (%d%%)", MAC2STR(recv_cb->mac_addr), node_info->node_type, node_info->color, node_info->current_state, node_info->battery_voltage, node_info->battery_percent);
+                                    CRGB node_color = get_effective_color(node_info->color, node_info->rgb);
+                                    log_v("Received node state from " MACSTR ": type=%d, color=%02x%02x%02x, mode=%d, ss_crc=%04x, battery=%dmV (%d%%)", MAC2STR(recv_cb->mac_addr), node_info->node_type, node_color.r, node_color.g, node_color.b, node_info->current_mode, node_info->mode_specific_state.mode_simon_says.game_config_crc, node_info->battery_voltage, node_info->battery_percent);
 
                                     boolean notSeenBefore = false;
                                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {

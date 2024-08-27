@@ -74,4 +74,4 @@ class IMode {
 
 extern IMode *get_current_mode();
 extern IMode *get_mode(node_mode_t mode);
-void set_mode(node_mode_t mode);
+void set_mode(node_mode_t mode, bool force = false);

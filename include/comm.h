@@ -73,7 +73,11 @@ typedef struct {
         uint32_t buzzer_active_remaining_ms;
     } __attribute__((packed)) mode_default;
     struct {
-        uint8_t seed;
+        uint16_t seed;
+        uint16_t game_config_crc;
+        uint16_t current_sequence_length;
+        uint16_t current_sequence_correct;
+        unsigned long time_since_state_change;
     } __attribute__((packed)) mode_simon_says;
 } __attribute__((packed)) mode_specific_state_t;
 
@@ -172,7 +176,11 @@ esp_err_t get_peer_info(const uint8_t *mac_addr, peer_data_t **data);
 void cleanup_peer_list();
 void comm_setup();
 void update_my_info();
+
 void send_state_update();
+void schedule_state_update();
+void send_scheduled_state_update();
+
 void reset_shutdown_timer();
 boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t len);
 

@@ -14,8 +14,8 @@ IMode *get_current_mode() {
     return get_mode(nvm_data.mode);
 }
 
-void set_mode(node_mode_t mode) {
-    if (nvm_data.mode != mode && mode < node_mode_t::NUM_MODES) {
+void set_mode(node_mode_t mode, boolean force) {
+    if ((force || nvm_data.mode != mode) && mode < node_mode_t::NUM_MODES) {
         log_d("Changing mode to %d.", mode);
 
         nvm_data.mode     = mode;

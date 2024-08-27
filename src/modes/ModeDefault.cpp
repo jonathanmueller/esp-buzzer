@@ -7,10 +7,13 @@ static CEveryNMillis buzzStateUpdate(ACCOUNCEMENT_INTERVAL_WHILE_ACTIVE);
 
 bool lastPushedBuzzerButton = false; /* Whether or not the buzzer button was pushed last loop iteration */
 
-unsigned long buzzer_active_until   = 0;
-unsigned long buzzer_disabled_until = 0;
-
 ModeDefault::ModeDefault() : IMode(MODE_DEFAULT) {
+    this->setup();
+}
+
+void ModeDefault::setup() {
+    this->buzzer_active_until   = 0;
+    this->buzzer_disabled_until = 0;
 }
 
 void ModeDefault::onReceiveState(peer_data_t *previous_state, payload_node_info_t *received_state) {
