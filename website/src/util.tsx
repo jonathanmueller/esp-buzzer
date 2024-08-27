@@ -1,7 +1,7 @@
 import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
 
-export const EXPECTED_DEVICE_VERSION = 0x14;
+export const EXPECTED_DEVICE_VERSION = 0x15;
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -75,13 +75,17 @@ export const mode_default_specific_state_t = new Struct('mode_default_specific_s
 export type mode_default_specific_state_t = ExtractType<typeof mode_default_specific_state_t>;
 
 export const mode_simon_says_specific_state_t = new Struct('mode_simon_says_specific_state_t')
-    .UInt8('seed')
+    .UInt16LE('seed')
+    .UInt16LE('game_config_crc')
+    .UInt16LE('current_sequence_length')
+    .UInt16LE('current_sequence_correct')
+    .UInt32LE('time_since_state_change')
     .compile();
 export type mode_simon_says_specific_state_t = ExtractType<typeof mode_simon_says_specific_state_t>;
 
 export const mode_specific_state_t = new Struct('mode_specific_state_t')
-    .Struct('mode_default_specific_state_t', mode_default_specific_state_t)
-    .Struct('mode_simon_says_specific_state_t', mode_simon_says_specific_state_t)
+    .Struct('mode_default', mode_default_specific_state_t)
+    .Struct('mode_simon_says', mode_simon_says_specific_state_t)
     .compile();
 export type mode_specific_state_t = ExtractType<typeof mode_specific_state_t>;
 
