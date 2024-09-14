@@ -1,14 +1,14 @@
 import { Button, ButtonGroup, Divider, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Popover, PopoverContent, PopoverTrigger, Slider, Switch, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "@nextui-org/react";
-import { Buffer } from 'buffer';
 import { crc16ccitt } from 'crc';
 import { useCallback, useEffect, useState } from "react";
 import { Power } from "react-bootstrap-icons";
+import BuzzerDevice from "./adapters/BuzzerDevice";
 import PingIntervalSlider from "./PingIntervalSlider";
-import { DeviceInfo, game_config_t, led_effect_t } from "./util";
+import { command_t, game_config_t, led_effect_t } from "./util";
 
 
 type GameBarProps = {
-    deviceInfo: DeviceInfo,
+    device: BuzzerDevice,
     handleError: (e: any) => void;
 };
 
@@ -19,37 +19,24 @@ const flashEffects = {
 };
 
 function GameBar(props: GameBarProps) {
-    const { deviceInfo, handleError } = props;
-    const sendCommandToAll = useCallback((data: number[]) =>
-        deviceInfo.device.controlTransferOut({
-            requestType: "vendor",
-            recipient: "device",
-            request: 0x30,  // Command
-            value: 0,
-            index: 0
-        }, new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, ...data]))
-            .then(result => {
-                console.log("result ", result);
-            })
-            .catch(handleError),
-        [deviceInfo, handleError]);
+    const { device, handleError } = props;
 
 
     return <>
         <Divider orientation="vertical" className="h-12" />
-        <PingIntervalSlider deviceInfo={deviceInfo} handleError={handleError} />
+        <PingIntervalSlider device={device} handleError={handleError} />
         <Divider orientation="vertical" className="h-12" />
         {/* <span className="grow" /> */}
         <ButtonGroup>
-            <Button color="default" variant="shadow" onPress={() => sendCommandToAll([0x31])}>Alle deaktivieren</Button>
+            <Button color="default" variant="shadow" onPress={() => device.sendCommandToAll(command_t.COMMAND_SET_INACTIVE)}>Alle deaktivieren</Button>
             <Divider orientation="vertical" />
-            <Button color="default" variant="shadow" onPress={() => sendCommandToAll([0x32])}>Alle aktivieren</Button>
-        </ButtonGroup>
+            <Button color="default" variant="shadow" onPress={() => device.sendCommandToAll(command_t.COMMAND_SET_ACTIVE)}>Alle aktivieren</Button>
+        </ButtonGroup >
         <span className="grow" />
-        <GameConfigButton deviceInfo={deviceInfo} handleError={handleError} />
+        <GameConfigButton device={device} handleError={handleError} />
         <Divider orientation="vertical" />
         <span className="grow" />
-        <Button color="danger" variant="shadow" startContent={<Power />} onPress={() => sendCommandToAll([0x50])}>Alle ausschalten</Button>
+        <Button color="danger" variant="shadow" startContent={<Power />} onPress={() => device.sendCommandToAll(command_t.COMMAND_SHUTDOWN)}>Alle ausschalten</Button>
     </>;
 
 }
@@ -66,8 +53,7 @@ type GameConfigButtonProps = GameBarProps & {
 
 
 function GameConfigButton(props: GameConfigButtonProps) {
-    const { deviceInfo, handleError } = props;
-    const { device } = deviceInfo;
+    const { device, handleError } = props;
 
     const [showPopover, setShowPopover] = useState(false);
     const [gameConfig, setGameConfig] = useState<game_config_t>({
@@ -80,20 +66,8 @@ function GameConfigButton(props: GameConfigButtonProps) {
     });
 
     const resetConfig = useCallback(async () => {
-        await device.controlTransferIn({
-            requestType: "vendor",
-            recipient: "device",
-            request: 0x10,
-            value: 0x21,
-            index: 0
-        }, game_config_t.baseSize)
-            .then(result => {
-                if (result.data) {
-                    const buf = Buffer.from(result.data.buffer);
-                    const gameConfig = new game_config_t(buf, true);
-                    setGameConfig(gameConfig);
-                }
-            })
+        await device.getGameConfig()
+            .then(gameConfig => setGameConfig(gameConfig))
             .catch(handleError);
     }, [device, handleError]);
 
@@ -107,16 +81,7 @@ function GameConfigButton(props: GameConfigButtonProps) {
 
     const onSave = useCallback(async () => {
         // console.log(game_config_t.raw(gameConfig).buffer.toString('hex'));
-        await device.controlTransferOut({
-            requestType: "vendor",
-            recipient: "device",
-            request: 0x10,
-            value: 0x21,
-            index: 0
-        }, game_config_t.raw(gameConfig))
-            // .then(result => {
-            // console.log("sent game config: ", result);
-            // })
+        device.setGameConfig(gameConfig)
             .catch(handleError);
     }, [device, gameConfig, handleError]);
 

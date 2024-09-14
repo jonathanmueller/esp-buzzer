@@ -29,7 +29,7 @@
 
 #define ESPNOW_MAXDELAY         512
 #define ESPNOW_QUEUE_SIZE       10
-#define IS_BROADCAST_ADDR(addr) (memcmp(addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
+#define IS_BROADCAST_ADDR(addr) ((addr != nullptr) && (memcmp(addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0))
 
 static QueueHandle_t s_comm_queue;
 
@@ -245,7 +245,7 @@ static esp_err_t get_or_create_peer_info(const uint8_t *mac_addr, peer_data_t **
     }
 
     for (uint8_t i = 0; i < PEER_DATA_TABLE_ENTRIES; i++) {
-        if (memcmp(peer_data_table[i].mac_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0) {
+        if (IS_BROADCAST_ADDR(peer_data_table[i].mac_addr)) {
             memset(&peer_data_table[i], 0, sizeof(peer_data_t));
             memcpy(&peer_data_table[i].mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
 
@@ -368,7 +368,9 @@ boolean executeCommand(uint8_t mac_addr[6], payload_command_t *command, uint32_t
             log_e("Send error: %s", esp_err_to_name(ret));
         }
 
-        return true;
+        if (!IS_BROADCAST_ADDR(mac_addr)) {
+            return true;
+        }
     }
 
     log_v("Received a command for me.");

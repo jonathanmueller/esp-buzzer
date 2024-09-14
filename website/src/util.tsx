@@ -2,6 +2,12 @@ import Struct, { ExtractType, typed } from "typed-struct";
 export const BROADCAST_MAC = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
 
 export const EXPECTED_DEVICE_VERSION = 0x15;
+export const PEER_DATA_TABLE_ENTRIES = 10;
+
+export const UUID_SERVICE = "20d86bb5-f515-4671-8a88-32fddb20920c";
+export const UUID_CHARACTERISTIC_VERSION = "4d3c98dc-2970-496a-bc20-c1295abc9730";
+export const UUID_CHARACTERISTIC_EXEC_COMMAND = "d384392d-e53e-4c21-a598-f7bf8ccfcb66";
+export const UUID_CHARACTERISTIC_PEER_LIST = "f7551fb0-05c3-4dff-a944-4980f40779e1";
 
 export function isBroadcastMac(mac_addr: Uint8Array) {
     return mac_addr.every(x => x === 0xFF);
@@ -17,6 +23,13 @@ export enum node_state_t {
     STATE_SHOW_BATTERY,
     STATE_CONFIG
 };
+
+export enum usb_request_t {
+    USB_REQUEST_VENDOR_DEVICE_VERSION = 0x00,
+    USB_REQUEST_VENDOR_DEVICE_CONFIG = 0x10,
+    USB_REQUEST_VENDOR_DEVICE_NETWORK_INFO = 0x20,
+    USB_REQUEST_VENDOR_DEVICE_SEND_COMMAND = 0x30,
+}
 
 export enum command_t {
     COMMAND_SET_PING_INTERVAL = 0x10,

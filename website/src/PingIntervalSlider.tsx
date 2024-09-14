@@ -1,54 +1,22 @@
 import { Slider } from "@nextui-org/react";
-import { useCallback, useEffect, useState } from "react";
-import { DeviceInfo, uint16_t } from "./util";
+import { useEffect, useState } from "react";
+import BuzzerDevice from "./adapters/BuzzerDevice";
 
 
 
 type PingIntervalSliderProps = {
-    deviceInfo: DeviceInfo,
+    device: BuzzerDevice,
     handleError: (e: any) => void;
 };
 
 function PingIntervalSlider(props: PingIntervalSliderProps) {
-    const { deviceInfo: { device }, handleError } = props;
+    const { device, handleError } = props;
     const [currentValue, setCurrentValue] = useState(0);
 
-
-    const fetchValue = useCallback(async () => {
-        await device.controlTransferIn({
-            requestType: "vendor",
-            recipient: "device",
-            request: 0x10,
-            value: 0x10,
-            index: 0
-        }, 2)
-            .then(result => {
-                if (result.data) {
-                    setCurrentValue(result.data.getUint16(0, true));
-                }
-            })
-            .catch(handleError);
-    }, [device, handleError]);
-
-    const updateValue = async (value: number) => {
-        await device.controlTransferOut({
-            requestType: "vendor",
-            recipient: "device",
-            request: 0x10,
-            value: 0x10,
-            index: 0
-        }, uint16_t(value))
-            .then(result => {
-                console.log("set ping interval response", result);
-            })
-            .catch(handleError);
-    };
-
-
     useEffect(() => {
-        fetchValue();
+        device.getPingInterval();
         return () => { };
-    }, [fetchValue]);
+    }, [device]);
 
     return <>
         {/* <Input
@@ -75,7 +43,7 @@ function PingIntervalSlider(props: PingIntervalSliderProps) {
             formatOptions={{ style: "unit", unit: "millisecond" }}
             // tooltipValueFormatOptions={{ maximumSignificantDigits: 1 }}
             onChange={value => setCurrentValue(value as number)}
-            onChangeEnd={value => updateValue(value as number)}
+            onChangeEnd={value => device.setPingInterval(value as number)}
 
             label="Ping Interval"
         />

@@ -210,7 +210,6 @@ bool vendorRequestCallback(uint8_t rhport, uint8_t requestStage, arduino_usb_con
                             } else if (requestStage == CONTROL_STAGE_ACK) {
                                 result = true;
 
-                                executeCommand(NULL, &game_config_command, sizeof(payload_command_t));
                                 executeCommand(s_broadcast_mac, &game_config_command, sizeof(payload_command_t));
 
                             } else {
